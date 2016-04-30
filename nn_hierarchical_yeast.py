@@ -17,13 +17,14 @@ from utils import (
     shuffle,
     get_gene_ontology)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.preprocessing import sequence
 import sys
 from aaindex import (
     AAINDEX)
 from collections import deque
 
 DATA_ROOT = 'data/yeast/'
-MAXLEN = 5000
+MAXLEN = 1000
 go = get_gene_ontology('goslim_yeast.obo')
 
 
@@ -50,41 +51,22 @@ def load_data():
     train_df = pd.read_pickle(DATA_ROOT + 'train.pkl')
     test_df = pd.read_pickle(DATA_ROOT + 'test.pkl')
 
-    train_data = list()
-    train_labels = list()
-    for i in range(len(functions)):
-        train_labels.append(list())
-    for row in train_df.iterrows():
-        seq = row[1]['sequences']
-        item = [0] * MAXLEN
-        for i in range(min(MAXLEN, len(seq))):
-            item[i] = AAINDEX[seq[i]]
-        train_data.append(item)
-        gos = row[1]['gos']
-        label = [0] * len(functions)
-        for go_id in gos:
-            label[go_indexes[go_id]] = 1
-        for i in range(len(label)):
-            train_labels[i].append(label[i])
-    test_data = list()
-    test_labels = list()
-    for i in range(len(functions)):
-        test_labels.append(list())
-    for row in test_df.iterrows():
-        seq = row[1]['sequences']
-        item = [0] * MAXLEN
-        for i in range(min(MAXLEN, len(seq))):
-            item[i] = AAINDEX[seq[i]]
-        test_data.append(item)
-        gos = row[1]['gos']
-        label = [0] * len(functions)
-        for go_id in gos:
-            label[go_indexes[go_id]] = 1
-        for i in range(len(label)):
-            test_labels[i].append(label[i])
+    train_data = train_df['indexes'].values
+    train_labels = train_df['labels'].values
+    test_data = test_df['indexes'].values
+    test_labels = test_df['labels'].values
+    train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
+    test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
+    shape = train_labels.shape
+    train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
+    train_labels = train_labels.transpose()
+    shape = test_labels.shape
+    test_labels = np.hstack(test_labels).reshape(shape[0], len(functions))
+    test_labels = test_labels.transpose()
+
     return (
-        (train_labels, np.array(train_data)),
-        (test_labels, np.array(test_data)))
+        (train_labels, train_data),
+        (test_labels, test_data))
 
 
 def compute_accuracy(predictions, labels):
@@ -128,10 +110,11 @@ def model():
     batch_size = 256
     nb_epoch = 100
     nb_classes = len(functions)
+    print "Loading Data"
     train, test = load_data()
     train_labels, train_data = train
     test_labels, test_data = test
-
+    print "Building the model"
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input')
     feature_model = get_feature_model()(inputs)
     go['GO:0003674']['model'] = feature_model

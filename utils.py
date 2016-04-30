@@ -18,6 +18,8 @@ def get_gene_ontology(filename='go.obo'):
                     go[obj['id']] = obj
                 obj = dict()
                 obj['is_a'] = list()
+                obj['part_of'] = list()
+                obj['regulates'] = list()
                 obj['is_obsolete'] = False
                 continue
             elif line == '[Typedef]':
@@ -30,6 +32,10 @@ def get_gene_ontology(filename='go.obo'):
                     obj['id'] = l[1]
                 elif l[0] == 'is_a':
                     obj['is_a'].append(l[1].split(' ! ')[0])
+                elif l[0] == 'is_a':
+                    obj['part_of'].append(l[1].split(' ! ')[0])
+                elif l[0] == 'is_a':
+                    obj['regulates'].append(l[1].split(' ! ')[0])
                 elif l[0] == 'is_obsolete' and l[1] == 'true':
                     obj['is_obsolete'] = True
     if obj is not None:
@@ -42,8 +48,16 @@ def get_gene_ontology(filename='go.obo'):
             val['children'] = list()
         for g_id in val['is_a']:
             if 'children' not in go[g_id]:
-                go[g_id]['children'] = list()
-            go[g_id]['children'].append(go_id)
+                go[g_id]['children'] = set()
+            go[g_id]['children'].add(go_id)
+        for g_id in val['part_of']:
+            if 'children' not in go[g_id]:
+                go[g_id]['children'] = set()
+            go[g_id]['children'].add(go_id)
+        for g_id in val['regulates']:
+            if 'children' not in go[g_id]:
+                go[g_id]['children'] = set()
+            go[g_id]['children'].add(go_id)
     return go
 
 
@@ -55,6 +69,12 @@ def get_anchestors(go, go_id):
         g_id = q.popleft()
         go_set.add(g_id)
         for parent_id in go[g_id]['is_a']:
+            if parent_id in go:
+                q.append(parent_id)
+        for parent_id in go[g_id]['part_of']:
+            if parent_id in go:
+                q.append(parent_id)
+        for parent_id in go[g_id]['regulates']:
             if parent_id in go:
                 q.append(parent_id)
     return go_set
