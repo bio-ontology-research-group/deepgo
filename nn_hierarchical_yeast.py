@@ -15,41 +15,39 @@ from keras.layers.convolutional import (
 from sklearn.metrics import classification_report
 from utils import (
     shuffle,
-    get_gene_ontology)
+    get_gene_ontology,
+    get_go_set,
+    get_anchestors,
+    get_parents,
+    BIOLOGICAL_PROCESS,
+    MOLECULAR_FUNCTION,
+    CELLULAR_COMPONENT)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
 import sys
 from aaindex import (
     AAINDEX)
 from collections import deque
+import time
 
 DATA_ROOT = 'data/yeast/'
 MAXLEN = 1000
+GO_ID = MOLECULAR_FUNCTION
 go = get_gene_ontology('goslim_yeast.obo')
 
 
-def get_go_set(go_id):
-    go_set = set()
-    q = deque()
-    q.append(go_id)
-    while len(q) > 0:
-        g_id = q.popleft()
-        go_set.add(g_id)
-        for ch_id in go[g_id]['children']:
-            q.append(ch_id)
-    return go_set
-
-functions = get_go_set('GO:0003674')
-functions.remove('GO:0003674')
-functions = list(functions)
+func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
+functions = func_df['functions'].values
+func_set = set(functions)
+print len(functions)
 go_indexes = dict()
 for ind, go_id in enumerate(functions):
     go_indexes[go_id] = ind
 
 
 def load_data():
-    train_df = pd.read_pickle(DATA_ROOT + 'train.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train-mf.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test-mf.pkl')
 
     train_data = train_df['indexes'].values
     train_labels = train_df['labels'].values
@@ -85,12 +83,12 @@ def get_feature_model():
         input_length=MAXLEN,
         dropout=0.2))
     model.add(Convolution1D(
-        nb_filter=64,
-        filter_length=8,
+        nb_filter=20,
+        filter_length=10,
         border_mode='valid',
         activation='relu',
         subsample_length=1))
-    model.add(MaxPooling1D(pool_length=4))
+    model.add(MaxPooling1D(pool_length=5, stride=5))
     model.add(Flatten())
     return model
 
@@ -101,56 +99,67 @@ def get_function_node(go_id, parent_models):
     else:
         merged_parent_models = merge(parent_models, mode='concat')
         dense = Dense(128, activation='relu')(merged_parent_models)
-    output = Dense(1, activation='sigmoid', name=go_id)(dense)
+    dropout = Dropout(0.2)(dense)
+    output = Dense(1, activation='sigmoid')(dropout)
     return dense, output
 
 
 def model():
     # set parameters:
     batch_size = 256
-    nb_epoch = 100
+    nb_epoch = 1
     nb_classes = len(functions)
+    start_time = time.time()
     print "Loading Data"
     train, test = load_data()
     train_labels, train_data = train
     test_labels, test_data = test
+    print "Data loaded in %d sec" % (time.time() - start_time)
     print "Building the model"
-    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input')
+    inputs = Input(shape=(MAXLEN,), dtype='int32')
     feature_model = get_feature_model()(inputs)
-    go['GO:0003674']['model'] = feature_model
+    go[GO_ID]['model'] = feature_model
     q = deque()
-    for go_id in go['GO:0003674']['children']:
+    for go_id in go[GO_ID]['children']:
         q.append(go_id)
 
     while len(q) > 0:
         go_id = q.popleft()
+        parents = get_parents(go, go_id)
         parent_models = list()
-        for p_id in go[go_id]['is_a']:
-            parent_models.append(go[p_id]['model'])
+        for p_id in parents:
+            if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
+                parent_models.append(go[p_id]['model'])
         dense, output = get_function_node(go_id, parent_models)
         go[go_id]['model'] = dense
         go[go_id]['output'] = output
         for ch_id in go[go_id]['children']:
-            q.append(ch_id)
+            if ch_id in func_set and 'model' not in go[ch_id]:
+                q.append(ch_id)
 
     output_models = [None] * nb_classes
-    for go_id, ind in go_indexes.iteritems():
-        output_models[ind] = go[go_id]['output']
+    for i in range(len(functions)):
+        output_models[i] = go[functions[i]]['output']
 
     model = Model(input=inputs, output=output_models)
+    print 'Model built in %d sec' % (time.time() - start_time)
+    print 'Compiling the model'
     model.compile(
         optimizer='rmsprop',
         loss='binary_crossentropy',
         metrics=['accuracy'])
-    model_path = DATA_ROOT + 'hierarchical.hdf5'
+
+    model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
-    output = {}
+    output = []
     for i in range(len(functions)):
-        output[functions[i]] = np.array(train_labels[i])
+        output.append(np.array(train_labels[i]))
+    print 'Compilation finished in %d sec' % (time.time() - start_time)
+    print 'Starting training the model'
     model.fit(
-        {'input': train_data},
+        train_data,
         output,
         batch_size=batch_size,
         nb_epoch=nb_epoch,
@@ -159,21 +168,25 @@ def model():
 
     print 'Loading weights'
     model.load_weights(model_path)
-    output_test = {}
+    output_test = []
     for i in range(len(functions)):
-        output_test[functions[i]] = np.array(test_labels[i])
-    score = model.evaluate(
-        {'input': test_data}, output_test, batch_size=batch_size)
+        output_test.append(np.array(test_labels[i]))
+    score = model.evaluate(test_data, output_test, batch_size=batch_size)
     predictions = model.predict(
         test_data, batch_size=batch_size, verbose=1)
 
     prot_res = list()
     for i in range(len(test_data)):
-        prot_res.append({'tp': 0.0, 'fp': 0.0, 'fn': 0.0})
+        prot_res.append({
+            'tp': 0.0, 'fp': 0.0, 'fn': 0.0,
+            'pred': list(), 'test': list()})
     for i in range(len(test_labels)):
-        pred = np.round(predictions[i].flatten())
+        rpred = predictions[i].flatten()
+        pred = np.round(rpred)
         test = test_labels[i]
         for j in range(len(pred)):
+            prot_res[j]['pred'].append(rpred[j])
+            prot_res[j]['test'].append(test[j])
             if pred[j] == 1 and test[j] == 1:
                 prot_res[j]['tp'] += 1
             elif pred[j] == 1 and test[j] == 0:
@@ -182,21 +195,35 @@ def model():
                 prot_res[j]['fn'] += 1
         print functions[i]
         print classification_report(test, pred)
-    f = 0.0
+    fs = 0.0
     n = 0
-    for prot in prot_res:
-        tp = prot['tp']
-        fp = prot['fp']
-        fn = prot['fn']
-        if tp + fn > 0 and tp + fp > 0:
-            recall = tp / (1.0 * (tp + fn))
-            precision = tp / (1.0 * (tp + fp))
-            if recall + precision != 0:
-                f += 2 * precision * recall / (precision + recall)
-            n += 1
-    print 'Protein centric F measure: \t', f / n
+    with open(DATA_ROOT + 'predictions.txt', 'w') as f:
+        for prot in prot_res:
+            pred = prot['pred']
+            test = prot['test']
+            f.write(str(pred[0]))
+            for v in pred[1:]:
+                f.write('\t' + str(v))
+            f.write('\n')
+
+            f.write(str(test[0]))
+            for v in test[1:]:
+                f.write('\t' + str(v))
+            f.write('\n')
+
+            tp = prot['tp']
+            fp = prot['fp']
+            fn = prot['fn']
+            if tp + fn > 0 and tp + fp > 0:
+                recall = tp / (1.0 * (tp + fn))
+                precision = tp / (1.0 * (tp + fp))
+                if recall + precision != 0:
+                    fs += 2 * precision * recall / (precision + recall)
+                n += 1
+    print 'Protein centric F measure: \t', fs / n, n
     print 'Test loss:\t', score[0]
     print 'Test accuracy:\t', score[1]
+    print 'Done in %d sec' % (time.time() - start_time)
 
 
 def print_report(report, go_id):

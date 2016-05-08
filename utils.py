@@ -3,6 +3,10 @@ from collections import deque
 from sklearn.preprocessing import OneHotEncoder
 from aaindex import AALETTER
 
+BIOLOGICAL_PROCESS = 'GO:0008150'
+MOLECULAR_FUNCTION = 'GO:0003674'
+CELLULAR_COMPONENT = 'GO:0005575'
+
 
 def get_gene_ontology(filename='go.obo'):
     # Reading Gene Ontology from OBO Formatted file
@@ -32,10 +36,12 @@ def get_gene_ontology(filename='go.obo'):
                     obj['id'] = l[1]
                 elif l[0] == 'is_a':
                     obj['is_a'].append(l[1].split(' ! ')[0])
-                elif l[0] == 'is_a':
-                    obj['part_of'].append(l[1].split(' ! ')[0])
-                elif l[0] == 'is_a':
-                    obj['regulates'].append(l[1].split(' ! ')[0])
+                # elif l[0] == 'relationship':
+                #     r = l[1].split(' ')
+                #     if r[0] == 'part_of':
+                #         obj['part_of'].append(r[1])
+                #     elif r[0] == 'regulates':
+                #         obj['regulates'].append(r[1])
                 elif l[0] == 'is_obsolete' and l[1] == 'true':
                     obj['is_obsolete'] = True
     if obj is not None:
@@ -45,19 +51,22 @@ def get_gene_ontology(filename='go.obo'):
             del go[go_id]
     for go_id, val in go.iteritems():
         if 'children' not in val:
-            val['children'] = list()
+            val['children'] = set()
         for g_id in val['is_a']:
-            if 'children' not in go[g_id]:
-                go[g_id]['children'] = set()
-            go[g_id]['children'].add(go_id)
-        for g_id in val['part_of']:
-            if 'children' not in go[g_id]:
-                go[g_id]['children'] = set()
-            go[g_id]['children'].add(go_id)
-        for g_id in val['regulates']:
-            if 'children' not in go[g_id]:
-                go[g_id]['children'] = set()
-            go[g_id]['children'].add(go_id)
+            if g_id in go:
+                if 'children' not in go[g_id]:
+                    go[g_id]['children'] = set()
+                go[g_id]['children'].add(go_id)
+        # for g_id in val['part_of']:
+        #     if g_id in go:
+        #         if 'children' not in go[g_id]:
+        #             go[g_id]['children'] = set()
+        #         go[g_id]['children'].add(go_id)
+        # for g_id in val['regulates']:
+        #     if g_id in go:
+        #         if 'children' not in go[g_id]:
+        #             go[g_id]['children'] = set()
+        #         go[g_id]['children'].add(go_id)
     return go
 
 
@@ -71,12 +80,26 @@ def get_anchestors(go, go_id):
         for parent_id in go[g_id]['is_a']:
             if parent_id in go:
                 q.append(parent_id)
-        for parent_id in go[g_id]['part_of']:
-            if parent_id in go:
-                q.append(parent_id)
-        for parent_id in go[g_id]['regulates']:
-            if parent_id in go:
-                q.append(parent_id)
+        # for parent_id in go[g_id]['part_of']:
+        #     if parent_id in go:
+        #         q.append(parent_id)
+        # for parent_id in go[g_id]['regulates']:
+        #     if parent_id in go:
+        #         q.append(parent_id)
+    return go_set
+
+
+def get_parents(go, go_id):
+    go_set = set()
+    for parent_id in go[go_id]['is_a']:
+        if parent_id in go:
+            go_set.add(parent_id)
+    # for parent_id in go[go_id]['part_of']:
+    #     if parent_id in go:
+    #         go_set.add(parent_id)
+    # for parent_id in go[go_id]['regulates']:
+    #     if parent_id in go:
+    #         go_set.add(parent_id)
     return go_set
 
 
