@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
 """
-THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python rnn_sequence.py
+KERAS_BACKEND=tensorflow python nn_hierarchical_tf.py
 """
 
 import numpy as np
 import pandas as pd
 from keras.models import Sequential, Model
 from keras.layers import (
-    Dense, Dropout, Activation, Input, Flatten, Highway, merge)
+    Dense, Dropout, Activation, Input,
+    Flatten, Highway, merge, BatchNormalization)
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
     Convolution1D, MaxPooling1D)
@@ -21,7 +22,8 @@ from utils import (
     get_parents,
     BIOLOGICAL_PROCESS,
     MOLECULAR_FUNCTION,
-    CELLULAR_COMPONENT)
+    CELLULAR_COMPONENT,
+    DataGenerator)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
 import sys
@@ -29,11 +31,18 @@ from aaindex import (
     AAINDEX)
 from collections import deque
 import time
+import tensorflow as tf
+from keras import backend as K
+
+sess = tf.Session()
+K.set_session(sess)
+
+sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/yeast/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
-go = get_gene_ontology('goslim_yeast.obo')
+go = get_gene_ontology('goslim-yeast.obo')
 
 
 func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
@@ -45,25 +54,32 @@ for ind, go_id in enumerate(functions):
     go_indexes[go_id] = ind
 
 
-def load_data():
+def load_data(validation_split=0.8):
     train_df = pd.read_pickle(DATA_ROOT + 'train-mf.pkl')
     test_df = pd.read_pickle(DATA_ROOT + 'test-mf.pkl')
-
-    train_data = train_df['indexes'].values
-    train_labels = train_df['labels'].values
+    train_n = int(validation_split * len(train_df['indexes']))
+    train_data = train_df[:train_n]['indexes'].values
+    train_labels = train_df[:train_n]['labels'].values
+    val_data = train_df[train_n:]['indexes'].values
+    val_labels = train_df[train_n:]['labels'].values
     test_data = test_df['indexes'].values
     test_labels = test_df['labels'].values
     train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
+    val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
     test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
     shape = train_labels.shape
     train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
     train_labels = train_labels.transpose()
+    shape = val_labels.shape
+    val_labels = np.hstack(val_labels).reshape(shape[0], len(functions))
+    val_labels = val_labels.transpose()
     shape = test_labels.shape
     test_labels = np.hstack(test_labels).reshape(shape[0], len(functions))
     test_labels = test_labels.transpose()
 
     return (
         (train_labels, train_data),
+        (val_labels, val_data),
         (test_labels, test_data))
 
 
@@ -95,85 +111,94 @@ def get_feature_model():
 
 def get_function_node(go_id, parent_models):
     if len(parent_models) == 1:
-        dense = Dense(128, activation='relu')(parent_models[0])
+        dense = Dense(64, activation='relu')(parent_models[0])
     else:
         merged_parent_models = merge(parent_models, mode='concat')
-        dense = Dense(128, activation='relu')(merged_parent_models)
-    dropout = Dropout(0.2)(dense)
-    output = Dense(1, activation='sigmoid')(dropout)
+        dense = Dense(64, activation='relu')(merged_parent_models)
+    # dropout = Dropout(0.2)(dense)
+    output = Dense(1, activation='sigmoid')(dense)
     return dense, output
 
 
 def model():
     # set parameters:
     batch_size = 256
-    nb_epoch = 1
+    nb_epoch = 100
     nb_classes = len(functions)
     start_time = time.time()
     print "Loading Data"
-    train, test = load_data()
+    train, val, test = load_data()
     train_labels, train_data = train
+    val_labels, val_data = val
     test_labels, test_data = test
+    print val_labels.shape, val_data.shape
+    print train_labels.shape, train_data.shape
     print "Data loaded in %d sec" % (time.time() - start_time)
     print "Building the model"
-    inputs = Input(shape=(MAXLEN,), dtype='int32')
-    feature_model = get_feature_model()(inputs)
-    go[GO_ID]['model'] = feature_model
-    q = deque()
-    for go_id in go[GO_ID]['children']:
-        q.append(go_id)
+    # inputs = Input(shape=(MAXLEN,), dtype='int32')
+    with tf.device('/gpu:0'):
+        inputs = tf.placeholder(tf.int32, shape=(None, MAXLEN))
+        feature_model = get_feature_model()(inputs)
+        go[GO_ID]['model'] = BatchNormalization()(feature_model)
+        q = deque()
+        for go_id in go[GO_ID]['children']:
+            q.append(go_id)
 
-    while len(q) > 0:
-        go_id = q.popleft()
-        parents = get_parents(go, go_id)
-        parent_models = list()
-        for p_id in parents:
-            if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
-                parent_models.append(go[p_id]['model'])
-        dense, output = get_function_node(go_id, parent_models)
-        go[go_id]['model'] = dense
-        go[go_id]['output'] = output
-        for ch_id in go[go_id]['children']:
-            if ch_id in func_set and 'model' not in go[ch_id]:
-                q.append(ch_id)
+        while len(q) > 0:
+            go_id = q.popleft()
+            parents = get_parents(go, go_id)
+            parent_models = list()
+            for p_id in parents:
+                if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
+                    parent_models.append(go[p_id]['model'])
+            dense, output = get_function_node(go_id, parent_models)
+            go[go_id]['model'] = dense
+            go[go_id]['output'] = output
+            for ch_id in go[go_id]['children']:
+                if ch_id in func_set and 'model' not in go[ch_id]:
+                    q.append(ch_id)
 
-    output_models = [None] * nb_classes
-    for i in range(len(functions)):
-        output_models[i] = go[functions[i]]['output']
+        output_models = [None] * nb_classes
+        for i in range(len(functions)):
+            output_models[i] = go[functions[i]]['output']
 
-    model = Model(input=inputs, output=output_models)
-    print 'Model built in %d sec' % (time.time() - start_time)
-    print 'Compiling the model'
-    model.compile(
-        optimizer='rmsprop',
-        loss='binary_crossentropy',
-        metrics=['accuracy'])
+        model = Model(input=inputs, output=output_models)
+        print 'Model built in %d sec' % (time.time() - start_time)
+        print 'Compiling the model'
+        model.compile(
+            optimizer='rmsprop',
+            loss='binary_crossentropy',
+            metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
-    checkpointer = ModelCheckpoint(
-        filepath=model_path, verbose=1, save_best_only=True)
-    earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
-    output = []
-    for i in range(len(functions)):
-        output.append(np.array(train_labels[i]))
-    print 'Compilation finished in %d sec' % (time.time() - start_time)
-    print 'Starting training the model'
-    model.fit(
-        train_data,
-        output,
-        batch_size=batch_size,
-        nb_epoch=nb_epoch,
-        validation_split=0.2,
-        callbacks=[checkpointer, earlystopper])
+        model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
+        checkpointer = ModelCheckpoint(
+            filepath=model_path, verbose=1, save_best_only=True)
+        earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
+        print 'Compilation finished in %d sec' % (time.time() - start_time)
+        print 'Starting training the model'
 
-    print 'Loading weights'
-    model.load_weights(model_path)
-    output_test = []
-    for i in range(len(functions)):
-        output_test.append(np.array(test_labels[i]))
-    score = model.evaluate(test_data, output_test, batch_size=batch_size)
-    predictions = model.predict(
-        test_data, batch_size=batch_size, verbose=1)
+        train_generator = DataGenerator(batch_size, nb_classes)
+        train_generator.fit(train_data, train_labels)
+        val_generator = DataGenerator(batch_size, nb_classes)
+        val_generator.fit(val_data, val_labels)
+
+        model.fit_generator(
+            train_generator,
+            samples_per_epoch=len(train_data),
+            nb_epoch=nb_epoch,
+            validation_data=val_generator,
+            nb_val_samples=len(val_data),
+            max_q_size=batch_size,
+            callbacks=[checkpointer, earlystopper])
+
+        print 'Loading weights'
+        model.load_weights(model_path)
+        output_test = []
+        for i in range(len(functions)):
+            output_test.append(np.array(test_labels[i]))
+        score = model.evaluate(test_data, output_test, batch_size=batch_size)
+        predictions = model.predict(
+            test_data, batch_size=batch_size, verbose=1)
 
     prot_res = list()
     for i in range(len(test_data)):
@@ -197,7 +222,7 @@ def model():
         print classification_report(test, pred)
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-mf.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']

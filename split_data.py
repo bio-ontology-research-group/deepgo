@@ -10,7 +10,7 @@ from aaindex import INVALID_ACIDS
 DATA_ROOT = 'data/'
 RESULT_ROOT = 'data/swiss/'
 FILES = (
-    'uniprot-swiss-bp.txt',)
+    'uniprot-swiss.txt',)
 
 
 MIN_LEN = 24
@@ -48,10 +48,10 @@ def main():
     split = 0.8
     train_len = int(len(all_prots) * split)
 
-    with open(RESULT_ROOT + 'train-bp.txt', 'w') as f:
+    with open(RESULT_ROOT + 'train.txt', 'w') as f:
         for prot_id, seq, gos in all_prots[:train_len]:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
-    with open(RESULT_ROOT + 'test-bp.txt', 'w') as f:
+    with open(RESULT_ROOT + 'test.txt', 'w') as f:
         for prot_id, seq, gos in all_prots[train_len:]:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
 

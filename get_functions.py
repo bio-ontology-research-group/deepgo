@@ -5,6 +5,7 @@ import pandas as pd
 from utils import (
     get_gene_ontology,
     get_go_set,
+    get_go_sets,
     get_anchestors,
     BIOLOGICAL_PROCESS,
     MOLECULAR_FUNCTION,
@@ -13,14 +14,15 @@ from aaindex import AAINDEX
 from multiprocessing import Pool
 
 
-DATA_ROOT = 'data/swiss/'
-FILENAME = 'train-bp.txt'
-ANNOT_NUM = 100
+DATA_ROOT = 'data/yeast/'
+FILENAME = 'train.txt'
+ANNOT_NUM = 10
 GO_ID = BIOLOGICAL_PROCESS
 
-go = get_gene_ontology('go.obo')
-functions = get_go_set(go, GO_ID)
-functions.remove(GO_ID)
+go = get_gene_ontology('goslim_yeast.obo')
+functions = get_go_sets(
+    go, [MOLECULAR_FUNCTION, BIOLOGICAL_PROCESS, CELLULAR_COMPONENT])
+# functions.remove(GO_ID)
 functions = list(functions)
 func_set = set(functions)
 print len(functions)
@@ -72,7 +74,7 @@ def get_functions():
             filtered.append(go_id)
     print len(filtered)
     df = pd.DataFrame({'functions': filtered})
-    df.to_pickle(DATA_ROOT + 'bp.pkl')
+    df.to_pickle(DATA_ROOT + 'all.pkl')
 
 
 def main(*args, **kwargs):

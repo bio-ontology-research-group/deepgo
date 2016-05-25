@@ -12,13 +12,13 @@ from utils import (
 from aaindex import AAINDEX
 
 
-DATA_ROOT = 'data/swiss/'
-FILENAME = 'test-bp.txt'
-GO_ID = BIOLOGICAL_PROCESS
+DATA_ROOT = 'data/yeast/'
+FILENAME = 'test.txt'
+GO_ID = MOLECULAR_FUNCTION
 
 go = get_gene_ontology('go.obo')
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'bp-old.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 print len(functions)
@@ -36,14 +36,16 @@ def load_data():
     with open(DATA_ROOT + FILENAME, 'r') as f:
         for line in f:
             items = line.strip().split('\t')
+            go_list = items[2].split('; ')
             go_set = set()
-            for go_id in items[2].split('; '):
+            for go_id in go_list:
                 if go_id in func_set:
                     go_set |= get_anchestors(go, go_id)
-            if not go_set:
+            if not go_set or GO_ID not in go_set:
                 continue
+            go_set.remove('root')
             go_set.remove(GO_ID)
-            gos.append(list(go_set))
+            gos.append(go_list)
             proteins.append(items[0])
             sequences.append(items[1])
             idx = [0] * len(items[1])
@@ -60,15 +62,22 @@ def load_data():
 
 
 def main(*args, **kwargs):
-    proteins, sequences, indexes, gos, labels = load_data()
-    data = {
-        'proteins': proteins,
-        'sequences': sequences,
-        'indexes': indexes,
-        'gos': gos,
-        'labels': labels}
-    df = pd.DataFrame(data)
-    df.to_pickle(DATA_ROOT + 'test-bp.pkl')
+    # proteins, sequences, indexes, gos, labels = load_data()
+    # data = {
+    #     'proteins': proteins,
+    #     'sequences': sequences,
+    #     'indexes': indexes,
+    #     'gos': gos,
+    #     'labels': labels}
+    # df = pd.DataFrame(data)
+    # df.to_pickle(DATA_ROOT + 'test-mf.pkl')
+    print functions
+
+    with open('data/go-weights.txt', 'r') as f:
+        for line in f:
+            items = line.strip().split()
+            if items[0] in func_set:
+                print line.strip()
 
 if __name__ == '__main__':
     main(*sys.argv)

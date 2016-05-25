@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 from collections import deque
 from sklearn.preprocessing import OneHotEncoder
 from aaindex import AALETTER
@@ -6,6 +6,38 @@ from aaindex import AALETTER
 BIOLOGICAL_PROCESS = 'GO:0008150'
 MOLECULAR_FUNCTION = 'GO:0003674'
 CELLULAR_COMPONENT = 'GO:0005575'
+
+
+class DataGenerator(object):
+
+    def __init__(self, batch_size, num_outputs):
+        self.batch_size = batch_size
+        self.num_outputs = num_outputs
+
+    def fit(self, inputs, targets):
+        self.start = 0
+        self.inputs = inputs
+        self.targets = targets
+
+    def __next__(self):
+        return self.next()
+
+    def reset(self):
+        self.start = 0
+
+    def next(self):
+        if self.start < len(self.inputs):
+            output = []
+            labels = self.targets
+            for i in range(self.num_outputs):
+                output.append(
+                    labels[i, self.start:(self.start + self.batch_size)])
+            res_inputs = self.inputs[self.start:(self.start + self.batch_size)]
+            self.start += self.batch_size
+            return (res_inputs, output)
+        else:
+            self.reset()
+            return self.next()
 
 
 def get_gene_ontology(filename='go.obo'):
@@ -67,6 +99,15 @@ def get_gene_ontology(filename='go.obo'):
         #         if 'children' not in go[g_id]:
         #             go[g_id]['children'] = set()
         #         go[g_id]['children'].add(go_id)
+    # Rooting
+    go['root'] = dict()
+    go['root']['is_a'] = []
+    go['root']['children'] = [
+        BIOLOGICAL_PROCESS, MOLECULAR_FUNCTION, CELLULAR_COMPONENT]
+    go[BIOLOGICAL_PROCESS]['is_a'] = ['root']
+    go[MOLECULAR_FUNCTION]['is_a'] = ['root']
+    go[CELLULAR_COMPONENT]['is_a'] = ['root']
+
     return go
 
 
@@ -103,6 +144,19 @@ def get_parents(go, go_id):
     return go_set
 
 
+def get_go_sets(go, go_ids):
+    go_set = set()
+    q = deque()
+    for go_id in go_ids:
+        q.append(go_id)
+    while len(q) > 0:
+        g_id = q.popleft()
+        go_set.add(g_id)
+        for ch_id in go[g_id]['children']:
+            q.append(ch_id)
+    return go_set
+
+
 def get_go_set(go, go_id):
     go_set = set()
     q = deque()
@@ -113,6 +167,46 @@ def get_go_set(go, go_id):
         for ch_id in go[g_id]['children']:
             q.append(ch_id)
     return go_set
+
+
+def get_disjoint_sets(go, go_id):
+    sets = list()
+    gos = list(go[go_id]['children'])
+    for ch_id in gos:
+        go_set = get_go_set(go, ch_id)
+        sets.append(go_set)
+    a = list()
+    n = len(sets)
+    for i in range(n):
+        a.append([0] * n)
+    for i in range(len(sets)):
+        for j in range(i + 1, len(sets)):
+            if sets[i].intersection(sets[j]):
+                a[i][j] = 1
+                a[j][i] = 1
+    for i in range(n):
+        print a[i]
+    used = set()
+
+    def dfs(v):
+        used.add(v)
+        for i in range(n):
+            if a[v][i] == 1 and i not in used:
+                dfs(i)
+    c = 0
+    u = set()
+    for i in range(n):
+        if i not in used:
+            dfs(i)
+            group = list()
+            for x in used:
+                if x not in u:
+                    group.append(gos[x])
+                    u.add(x)
+            print '------------'
+            c += 1
+            print len(get_go_sets(go, group))
+
 
 encoder = OneHotEncoder()
 
@@ -198,10 +292,13 @@ def shuffle(*args, **kwargs):
     seed = None
     if 'seed' in kwargs:
         seed = kwargs['seed']
-    rng_state = numpy.random.get_state()
+    rng_state = np.random.get_state()
     for arg in args:
         if seed is not None:
-            numpy.random.seed(seed)
+            np.random.seed(seed)
         else:
-            numpy.random.set_state(rng_state)
-        numpy.random.shuffle(arg)
+            np.random.set_state(rng_state)
+        np.random.shuffle(arg)
+
+
+# get_disjoint_sets(get_gene_ontology(), CELLULAR_COMPONENT)

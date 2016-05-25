@@ -32,16 +32,18 @@ from aaindex import (
 from collections import deque
 import time
 import tensorflow as tf
+from keras import backend as K
+
 
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/yeast/'
 MAXLEN = 1000
-GO_ID = MOLECULAR_FUNCTION
-go = get_gene_ontology('go.obo')
+# GO_ID = BIOLOGICAL_PROCESS
+go = get_gene_ontology('goslim_yeast.obo')
 
 
-func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'all.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 print len(functions)
@@ -51,8 +53,8 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-mf.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test-mf.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -105,20 +107,18 @@ def get_feature_model():
     return model
 
 
-def get_function_node(go_id, parent_models):
+def get_function_node(go_id, parent_models, output_dim):
     if len(parent_models) == 1:
-        dense = Dense(128, activation='relu')(parent_models[0])
+        dense = Dense(output_dim, activation='relu')(parent_models[0])
     else:
         merged_parent_models = merge(parent_models, mode='concat')
-        dense = Dense(128, activation='relu')(merged_parent_models)
-    # dropout = Dropout(0.2)(dense)
-    output = Dense(1, activation='sigmoid')(dense)
-    return dense, output
+        dense = Dense(output_dim, activation='relu')(merged_parent_models)
+    return dense
 
 
 def model():
     # set parameters:
-    batch_size = 512
+    batch_size = 256
     nb_epoch = 100
     nb_classes = len(functions)
     start_time = time.time()
@@ -133,25 +133,27 @@ def model():
     print "Building the model"
     inputs = Input(shape=(MAXLEN,), dtype='int32')
     feature_model = get_feature_model()(inputs)
-    go[GO_ID]['model'] = BatchNormalization()(feature_model)
+    go['root']['model'] = BatchNormalization()(feature_model)
     q = deque()
-    for go_id in go[GO_ID]['children']:
-        q.append(go_id)
-
+    for go_id in go['root']['children']:
+        q.append((go_id, 512))
+    min_output_dim = 1024
     while len(q) > 0:
-        go_id = q.popleft()
+        go_id, output_dim = q.popleft()
+        min_output_dim = min(min_output_dim, output_dim)
         parents = get_parents(go, go_id)
         parent_models = list()
         for p_id in parents:
-            if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
+            if 'model' in go[p_id]:
                 parent_models.append(go[p_id]['model'])
-        dense, output = get_function_node(go_id, parent_models)
+        dense = get_function_node(go_id, parent_models, output_dim)
+        output = Dense(1, activation='sigmoid')(dense)
         go[go_id]['model'] = dense
         go[go_id]['output'] = output
         for ch_id in go[go_id]['children']:
             if ch_id in func_set and 'model' not in go[ch_id]:
-                q.append(ch_id)
-
+                q.append((ch_id, output_dim / 2))
+    print min_output_dim
     output_models = [None] * nb_classes
     for i in range(len(functions)):
         output_models[i] = go[functions[i]]['output']
@@ -164,7 +166,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_all.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
@@ -216,7 +218,7 @@ def model():
         print classification_report(test, pred)
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-mf.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-all.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']
@@ -252,8 +254,7 @@ def print_report(report, go_id):
 
 
 def main(*args, **kwargs):
-    with tf.device('/gpu:1'):
-        model()
+    model()
 
 if __name__ == '__main__':
     main(*sys.argv)
