@@ -212,23 +212,29 @@ encoder = OneHotEncoder()
 
 
 def init_encoder():
-    data = list()
-    for l in AAINDEX:
-        data.append(l)
+    data = np.arange(1, 21).reshape(20, 1)
     encoder.fit(data)
 
 init_encoder()
 
 
-def encode_seq_one_hot(seq, maxlen=1000):
-    data = list()
-    for l in seq:
-        data.append(l)
-    data = encoder.transform(data).toarray()
-    data = list(data)
-    data = data[:maxlen]
-    while (len(data) < maxlen):
-        data.append([0] * 20)
+def encode_seq_one_hot(seq):
+    res = np.zeros((len(seq), 20), dtype='float32')
+    for i in range(len(seq)):
+        res[i, :] = encoder.transform([[seq[i]]]).toarray()
+    for i in range(len(seq)):
+        print seq[i], res[i]
+    return res
+
+
+def encode_sequences(sequences, maxlen=1000):
+    n = len(sequences)
+    data = np.zeros((n, maxlen, 20), dtype='float32')
+    for i in range(n):
+        m = len(sequences[i])
+        print m
+        data[i, :m, :] = encode_seq_one_hot(sequences[i])
+        break
     return data
 
 

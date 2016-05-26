@@ -13,11 +13,12 @@ FILES = (
     'uniprot-swiss.txt',)
 
 
-MIN_LEN = 24
+MINLEN = 25
+MAXLEN = 1000
 
 
 def is_ok(seq):
-    if len(seq) < MIN_LEN:
+    if len(seq) < MINLEN or len(seq) > MAXLEN:
         return False
     for c in seq:
         if c in INVALID_ACIDS:

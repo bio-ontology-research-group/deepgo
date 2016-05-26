@@ -23,7 +23,8 @@ from utils import (
     BIOLOGICAL_PROCESS,
     MOLECULAR_FUNCTION,
     CELLULAR_COMPONENT,
-    DataGenerator)
+    DataGenerator,
+    encode_sequences)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
 import sys
@@ -62,6 +63,9 @@ def load_data(validation_split=0.8):
     train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
     val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
     test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
+    # train_data = encode_sequences(train_data, maxlen=MAXLEN)
+    # val_data = encode_sequences(val_data, maxlen=MAXLEN)
+    # test_data = encode_sequences(test_data, maxlen=MAXLEN)
     shape = train_labels.shape
     train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
     train_labels = train_labels.transpose()
@@ -86,7 +90,7 @@ def compute_accuracy(predictions, labels):
 
 def get_feature_model():
     embedding_dims = 20
-    max_features = 20
+    max_features = 21
     model = Sequential()
     model.add(Embedding(
         max_features,
@@ -110,7 +114,6 @@ def get_function_node(go_id, parent_models, output_dim):
     else:
         merged_parent_models = merge(parent_models, mode='concat')
         dense = Dense(output_dim, activation='relu')(merged_parent_models)
-    # dropout = Dropout(0.2)(dense)
     output = Dense(1, activation='sigmoid')(dense)
     return dense, output
 
@@ -119,7 +122,7 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
-    output_dim = 1024
+    output_dim = 64
     nb_classes = len(functions)
     start_time = time.time()
     print "Loading Data"

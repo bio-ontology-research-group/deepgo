@@ -14,15 +14,17 @@ from aaindex import AAINDEX
 from multiprocessing import Pool
 
 
-DATA_ROOT = 'data/yeast/'
+DATA_ROOT = 'data/swiss/'
 FILENAME = 'train.txt'
 ANNOT_NUM = 10
-GO_ID = BIOLOGICAL_PROCESS
+GO_ID = CELLULAR_COMPONENT
 
-go = get_gene_ontology('goslim_yeast.obo')
-functions = get_go_sets(
-    go, [MOLECULAR_FUNCTION, BIOLOGICAL_PROCESS, CELLULAR_COMPONENT])
-# functions.remove(GO_ID)
+go = get_gene_ontology('go.obo')
+# functions = get_go_sets(
+#     go, [MOLECULAR_FUNCTION, BIOLOGICAL_PROCESS, CELLULAR_COMPONENT])
+
+functions = get_go_set(go, GO_ID)
+functions.remove(GO_ID)
 functions = list(functions)
 func_set = set(functions)
 print len(functions)
@@ -74,7 +76,7 @@ def get_functions():
             filtered.append(go_id)
     print len(filtered)
     df = pd.DataFrame({'functions': filtered})
-    df.to_pickle(DATA_ROOT + 'all.pkl')
+    df.to_pickle(DATA_ROOT + 'cc.pkl')
 
 
 def main(*args, **kwargs):

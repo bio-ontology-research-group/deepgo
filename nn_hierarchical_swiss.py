@@ -59,9 +59,9 @@ def load_data(validation_split=0.8):
     val_labels = train_df[train_n:]['labels'].values
     test_data = test_df['indexes'].values
     test_labels = test_df['labels'].values
-    train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
-    val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
-    test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
+    # train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
+    # val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
+    # test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
     shape = train_labels.shape
     train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
     train_labels = train_labels.transpose()
@@ -110,7 +110,6 @@ def get_function_node(go_id, parent_models, output_dim):
     else:
         merged_parent_models = merge(parent_models, mode='concat')
         dense = Dense(output_dim, activation='relu')(merged_parent_models)
-    # dropout = Dropout(0.2)(dense)
     output = Dense(1, activation='sigmoid')(dense)
     return dense, output
 
