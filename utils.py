@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque
 from sklearn.preprocessing import OneHotEncoder
-from aaindex import AALETTER
+from aaindex import AAINDEX
 
 BIOLOGICAL_PROCESS = 'GO:0008150'
 MOLECULAR_FUNCTION = 'GO:0003674'
@@ -213,17 +213,17 @@ encoder = OneHotEncoder()
 
 def init_encoder():
     data = list()
-    for l in AALETTER:
-        data.append([ord(l)])
+    for l in AAINDEX:
+        data.append(l)
     encoder.fit(data)
 
 init_encoder()
 
 
-def encode_seq_one_hot(seq, maxlen=500):
+def encode_seq_one_hot(seq, maxlen=1000):
     data = list()
     for l in seq:
-        data.append([ord(l)])
+        data.append(l)
     data = encoder.transform(data).toarray()
     data = list(data)
     data = data[:maxlen]
