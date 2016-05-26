@@ -31,8 +31,6 @@ from aaindex import (
     AAINDEX)
 from collections import deque
 import time
-import tensorflow as tf
-from keras import backend as K
 
 
 sys.setrecursionlimit(100000)
@@ -136,7 +134,7 @@ def model():
     go['root']['model'] = BatchNormalization()(feature_model)
     q = deque()
     for go_id in go['root']['children']:
-        q.append((go_id, 512))
+        q.append((go_id, 64))
     min_output_dim = 1024
     while len(q) > 0:
         go_id, output_dim = q.popleft()

@@ -31,18 +31,13 @@ from aaindex import (
     AAINDEX)
 from collections import deque
 import time
-import tensorflow as tf
-from keras import backend as K
-
-sess = tf.Session()
-K.set_session(sess)
 
 sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/yeast/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
-go = get_gene_ontology('goslim-yeast.obo')
+go = get_gene_ontology('goslim_yeast.obo')
 
 
 func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
@@ -109,12 +104,12 @@ def get_feature_model():
     return model
 
 
-def get_function_node(go_id, parent_models):
+def get_function_node(go_id, parent_models, output_dim):
     if len(parent_models) == 1:
-        dense = Dense(64, activation='relu')(parent_models[0])
+        dense = Dense(output_dim, activation='relu')(parent_models[0])
     else:
         merged_parent_models = merge(parent_models, mode='concat')
-        dense = Dense(64, activation='relu')(merged_parent_models)
+        dense = Dense(output_dim, activation='relu')(merged_parent_models)
     # dropout = Dropout(0.2)(dense)
     output = Dense(1, activation='sigmoid')(dense)
     return dense, output
@@ -122,8 +117,9 @@ def get_function_node(go_id, parent_models):
 
 def model():
     # set parameters:
-    batch_size = 256
+    batch_size = 512
     nb_epoch = 100
+    output_dim = 1024
     nb_classes = len(functions)
     start_time = time.time()
     print "Loading Data"
@@ -135,70 +131,69 @@ def model():
     print train_labels.shape, train_data.shape
     print "Data loaded in %d sec" % (time.time() - start_time)
     print "Building the model"
-    # inputs = Input(shape=(MAXLEN,), dtype='int32')
-    with tf.device('/gpu:0'):
-        inputs = tf.placeholder(tf.int32, shape=(None, MAXLEN))
-        feature_model = get_feature_model()(inputs)
-        go[GO_ID]['model'] = BatchNormalization()(feature_model)
-        q = deque()
-        for go_id in go[GO_ID]['children']:
-            q.append(go_id)
+    inputs = Input(shape=(MAXLEN,), dtype='int32')
+    feature_model = get_feature_model()(inputs)
+    go[GO_ID]['model'] = BatchNormalization()(feature_model)
+    q = deque()
+    for go_id in go[GO_ID]['children']:
+        q.append((go_id, output_dim))
+    min_dim = output_dim
+    while len(q) > 0:
+        go_id, dim = q.popleft()
+        min_dim = min(min_dim, dim)
+        parents = get_parents(go, go_id)
+        parent_models = list()
+        for p_id in parents:
+            if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
+                parent_models.append(go[p_id]['model'])
+        dense, output = get_function_node(go_id, parent_models, dim)
+        go[go_id]['model'] = dense
+        go[go_id]['output'] = output
+        for ch_id in go[go_id]['children']:
+            if ch_id in func_set and 'model' not in go[ch_id]:
+                q.append((ch_id, dim / 2))
+    print 'Min dim', min_dim
+    output_models = [None] * nb_classes
+    for i in range(len(functions)):
+        output_models[i] = go[functions[i]]['output']
 
-        while len(q) > 0:
-            go_id = q.popleft()
-            parents = get_parents(go, go_id)
-            parent_models = list()
-            for p_id in parents:
-                if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
-                    parent_models.append(go[p_id]['model'])
-            dense, output = get_function_node(go_id, parent_models)
-            go[go_id]['model'] = dense
-            go[go_id]['output'] = output
-            for ch_id in go[go_id]['children']:
-                if ch_id in func_set and 'model' not in go[ch_id]:
-                    q.append(ch_id)
+    model = Model(input=inputs, output=output_models)
+    print 'Model built in %d sec' % (time.time() - start_time)
+    print 'Compiling the model'
+    model.compile(
+        optimizer='rmsprop',
+        loss='binary_crossentropy',
+        metrics=['accuracy'])
 
-        output_models = [None] * nb_classes
-        for i in range(len(functions)):
-            output_models[i] = go[functions[i]]['output']
+    model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
+    checkpointer = ModelCheckpoint(
+        filepath=model_path, verbose=1, save_best_only=True)
+    earlystopper = EarlyStopping(monitor='val_loss', patience=5, verbose=1)
+    print 'Compilation finished in %d sec' % (time.time() - start_time)
+    print 'Starting training the model'
 
-        model = Model(input=inputs, output=output_models)
-        print 'Model built in %d sec' % (time.time() - start_time)
-        print 'Compiling the model'
-        model.compile(
-            optimizer='rmsprop',
-            loss='binary_crossentropy',
-            metrics=['accuracy'])
+    train_generator = DataGenerator(batch_size, nb_classes)
+    train_generator.fit(train_data, train_labels)
+    val_generator = DataGenerator(batch_size, nb_classes)
+    val_generator.fit(val_data, val_labels)
 
-        model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
-        checkpointer = ModelCheckpoint(
-            filepath=model_path, verbose=1, save_best_only=True)
-        earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
-        print 'Compilation finished in %d sec' % (time.time() - start_time)
-        print 'Starting training the model'
+    model.fit_generator(
+        train_generator,
+        samples_per_epoch=len(train_data),
+        nb_epoch=nb_epoch,
+        validation_data=val_generator,
+        nb_val_samples=len(val_data),
+        max_q_size=batch_size,
+        callbacks=[checkpointer, earlystopper])
 
-        train_generator = DataGenerator(batch_size, nb_classes)
-        train_generator.fit(train_data, train_labels)
-        val_generator = DataGenerator(batch_size, nb_classes)
-        val_generator.fit(val_data, val_labels)
-
-        model.fit_generator(
-            train_generator,
-            samples_per_epoch=len(train_data),
-            nb_epoch=nb_epoch,
-            validation_data=val_generator,
-            nb_val_samples=len(val_data),
-            max_q_size=batch_size,
-            callbacks=[checkpointer, earlystopper])
-
-        print 'Loading weights'
-        model.load_weights(model_path)
-        output_test = []
-        for i in range(len(functions)):
-            output_test.append(np.array(test_labels[i]))
-        score = model.evaluate(test_data, output_test, batch_size=batch_size)
-        predictions = model.predict(
-            test_data, batch_size=batch_size, verbose=1)
+    print 'Loading weights'
+    model.load_weights(model_path)
+    output_test = []
+    for i in range(len(functions)):
+        output_test.append(np.array(test_labels[i]))
+    score = model.evaluate(test_data, output_test, batch_size=batch_size)
+    predictions = model.predict(
+        test_data, batch_size=batch_size, verbose=1)
 
     prot_res = list()
     for i in range(len(test_data)):

@@ -16,9 +16,9 @@ DATA_ROOT = 'data/yeast/'
 FILENAME = 'test.txt'
 GO_ID = MOLECULAR_FUNCTION
 
-go = get_gene_ontology('go.obo')
+go = get_gene_ontology('goslim_yeast.obo')
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp-old.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 print len(functions)
@@ -62,22 +62,22 @@ def load_data():
 
 
 def main(*args, **kwargs):
-    # proteins, sequences, indexes, gos, labels = load_data()
-    # data = {
-    #     'proteins': proteins,
-    #     'sequences': sequences,
-    #     'indexes': indexes,
-    #     'gos': gos,
-    #     'labels': labels}
-    # df = pd.DataFrame(data)
-    # df.to_pickle(DATA_ROOT + 'test-mf.pkl')
+    proteins, sequences, indexes, gos, labels = load_data()
+    data = {
+        'proteins': proteins,
+        'sequences': sequences,
+        'indexes': indexes,
+        'gos': gos,
+        'labels': labels}
+    df = pd.DataFrame(data)
+    df.to_pickle(DATA_ROOT + 'test-mf.pkl')
     print functions
 
-    with open('data/go-weights.txt', 'r') as f:
-        for line in f:
-            items = line.strip().split()
-            if items[0] in func_set:
-                print line.strip()
+    # with open('data/go-weights.txt', 'r') as f:
+    #     for line in f:
+    #         items = line.strip().split()
+    #         if items[0] in func_set:
+    #             print line.strip()
 
 if __name__ == '__main__':
     main(*sys.argv)

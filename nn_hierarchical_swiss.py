@@ -31,7 +31,6 @@ from aaindex import (
     AAINDEX)
 from collections import deque
 import time
-import tensorflow as tf
 
 sys.setrecursionlimit(100000)
 
@@ -105,12 +104,12 @@ def get_feature_model():
     return model
 
 
-def get_function_node(go_id, parent_models):
+def get_function_node(go_id, parent_models, output_dim):
     if len(parent_models) == 1:
-        dense = Dense(128, activation='relu')(parent_models[0])
+        dense = Dense(output_dim, activation='relu')(parent_models[0])
     else:
         merged_parent_models = merge(parent_models, mode='concat')
-        dense = Dense(128, activation='relu')(merged_parent_models)
+        dense = Dense(output_dim, activation='relu')(merged_parent_models)
     # dropout = Dropout(0.2)(dense)
     output = Dense(1, activation='sigmoid')(dense)
     return dense, output
@@ -120,6 +119,7 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
+    output_dim = 1024
     nb_classes = len(functions)
     start_time = time.time()
     print "Loading Data"
@@ -136,22 +136,23 @@ def model():
     go[GO_ID]['model'] = BatchNormalization()(feature_model)
     q = deque()
     for go_id in go[GO_ID]['children']:
-        q.append(go_id)
-
+        q.append((go_id, output_dim))
+    min_dim = output_dim
     while len(q) > 0:
-        go_id = q.popleft()
+        go_id, dim = q.popleft()
+        min_dim = min(min_dim, dim)
         parents = get_parents(go, go_id)
         parent_models = list()
         for p_id in parents:
             if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
                 parent_models.append(go[p_id]['model'])
-        dense, output = get_function_node(go_id, parent_models)
+        dense, output = get_function_node(go_id, parent_models, dim)
         go[go_id]['model'] = dense
         go[go_id]['output'] = output
         for ch_id in go[go_id]['children']:
             if ch_id in func_set and 'model' not in go[ch_id]:
-                q.append(ch_id)
-
+                q.append((ch_id, dim / 2))
+    print 'Min dim', min_dim
     output_models = [None] * nb_classes
     for i in range(len(functions)):
         output_models[i] = go[functions[i]]['output']
@@ -167,7 +168,7 @@ def model():
     model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
-    earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
+    earlystopper = EarlyStopping(monitor='val_loss', patience=5, verbose=1)
     print 'Compilation finished in %d sec' % (time.time() - start_time)
     print 'Starting training the model'
 
@@ -252,8 +253,7 @@ def print_report(report, go_id):
 
 
 def main(*args, **kwargs):
-    with tf.device('/gpu:1'):
-        model()
+    model()
 
 if __name__ == '__main__':
     main(*sys.argv)
