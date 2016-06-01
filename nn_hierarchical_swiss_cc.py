@@ -234,16 +234,18 @@ def model():
             tp = prot['tp']
             fp = prot['fp']
             fn = prot['fn']
-            if tp + fn > 0 and tp + fp > 0:
+            if tp == 0.0 and fp == 0.0 and fn == 0.0:
+                continue
+            if tp != 0.0:
                 recall = tp / (1.0 * (tp + fn))
                 precision = tp / (1.0 * (tp + fp))
-                if recall + precision != 0:
-                    fs += 2 * precision * recall / (precision + recall)
-                n += 1
+                fs += 2 * precision * recall / (precision + recall)
+            n += 1
     logging.info('Protein centric F measure: \t %f %d' % (fs / n, n))
     logging.info('Test loss:\t %f' % score[0])
     logging.info('Test accuracy:\t %f' % score[1])
     logging.info('Done in %d sec' % (time.time() - start_time))
+
 
 def print_report(report, go_id):
     with open(DATA_ROOT + 'reports.txt', 'a') as f:
