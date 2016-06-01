@@ -154,6 +154,7 @@ def model():
     logging.info('Min dim %d' % min_dim)
     output_models = [None] * nb_classes
     for i in range(len(functions)):
+        logging.info(functions[i])
         output_models[i] = go[functions[i]]['output']
 
     model = Model(input=inputs, output=output_models)

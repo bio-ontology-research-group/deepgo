@@ -38,7 +38,7 @@ sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
-GO_ID = MOLECULAR_FUNCTION
+GO_ID = BIOLOGICAL_PROCESS
 go = get_gene_ontology('go.obo')
 
 
@@ -65,6 +65,7 @@ def load_data(validation_split=0.8):
     val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
     test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
     shape = train_labels.shape
+    print shape
     train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
     train_labels = train_labels.transpose()
     shape = val_labels.shape
