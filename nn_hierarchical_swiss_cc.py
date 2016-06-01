@@ -240,11 +240,10 @@ def model():
                 if recall + precision != 0:
                     fs += 2 * precision * recall / (precision + recall)
                 n += 1
-    logging.info('Protein centric F measure: \t', fs / n, n)
-    logging.info('Test loss:\t', score[0])
-    logging.info('Test accuracy:\t', score[1])
+    logging.info('Protein centric F measure: \t %f %d' % (fs / n, n))
+    logging.info('Test loss:\t %f' % score[0])
+    logging.info('Test accuracy:\t %f' % score[1])
     logging.info('Done in %d sec' % (time.time() - start_time))
-
 
 def print_report(report, go_id):
     with open(DATA_ROOT + 'reports.txt', 'a') as f:

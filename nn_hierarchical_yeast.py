@@ -121,7 +121,7 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
-    output_dim = 1024
+    output_dim = 128
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
@@ -241,9 +241,9 @@ def model():
                 if recall + precision != 0:
                     fs += 2 * precision * recall / (precision + recall)
                 n += 1
-    logging.info('Protein centric F measure: \t', fs / n, n)
-    logging.info('Test loss:\t', score[0])
-    logging.info('Test accuracy:\t', score[1])
+    logging.info('Protein centric F measure: \t %f %d' % (fs / n, n))
+    logging.info('Test loss:\t %f' % score[0])
+    logging.info('Test accuracy:\t %f' % score[1])
     logging.info('Done in %d sec' % (time.time() - start_time))
 
 

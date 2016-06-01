@@ -4,14 +4,14 @@ import sys
 import numpy as np
 import pandas as pd
 
-DATA_ROOT = 'data/swiss/model-mf-1364/'
+DATA_ROOT = 'data/yeast/'
 
 
 def compute_performance():
     fs = 0.0
     n = 0
-    t = 0.7
-    with open(DATA_ROOT + 'predictions.txt', 'r') as f:
+    t = 0.5
+    with open(DATA_ROOT + 'predictions-mf.txt', 'r') as f:
         for line in f:
             preds = map(float, line.strip().split('\t'))
             tests = map(float, next(f).strip().split('\t'))
