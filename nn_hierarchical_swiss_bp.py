@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 """
-OMP_NUM_THREADS=32 THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python nn_hierarchical_yeast.py
-KERAS_BACKEND=tensorflow python nn_hierarchical_yeast.py
+KERAS_BACKEND=tensorflow python nn_hierarchical_tf.py
 """
 
 import numpy as np
@@ -37,13 +36,13 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/yeast/'
+DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
-go = get_gene_ontology('goslim_yeast.obo')
+go = get_gene_ontology('go.obo')
 
 
-func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 logging.info(len(functions))
@@ -53,8 +52,8 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-mf.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test-mf.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train-bp.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test-bp.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -89,7 +88,7 @@ def compute_accuracy(predictions, labels):
 
 def get_feature_model():
     embedding_dims = 20
-    max_features = 21
+    max_features = 20
     model = Sequential()
     model.add(Embedding(
         max_features,
@@ -121,7 +120,7 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
-    output_dim = 1024
+    output_dim = 128
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
@@ -165,7 +164,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_bp.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=5, verbose=1)
@@ -218,7 +217,7 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-mf.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-bp.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']

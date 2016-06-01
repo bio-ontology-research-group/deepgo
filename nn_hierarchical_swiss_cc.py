@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-KERAS_BACKEND=tensorflow python nn_hierarchical_tf.py
+KERAS_BACKEND=tensorflow python nn_hierarchical_swiss_cc.py
 """
 
 import numpy as np
@@ -31,27 +31,29 @@ from aaindex import (
     AAINDEX)
 from collections import deque
 import time
+import logging
 
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
-GO_ID = MOLECULAR_FUNCTION
+GO_ID = CELLULAR_COMPONENT
 go = get_gene_ontology('go.obo')
 
 
-func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
-print len(functions)
+logging.info(len(functions))
 go_indexes = dict()
 for ind, go_id in enumerate(functions):
     go_indexes[go_id] = ind
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-mf.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test-mf.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train-cc.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test-cc.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -59,9 +61,9 @@ def load_data(validation_split=0.8):
     val_labels = train_df[train_n:]['labels'].values
     test_data = test_df['indexes'].values
     test_labels = test_df['labels'].values
-    # train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
-    # val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
-    # test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
+    train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
+    val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
+    test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
     shape = train_labels.shape
     train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
     train_labels = train_labels.transpose()
@@ -86,7 +88,7 @@ def compute_accuracy(predictions, labels):
 
 def get_feature_model():
     embedding_dims = 20
-    max_features = 20
+    max_features = 21
     model = Sequential()
     model.add(Embedding(
         max_features,
@@ -118,18 +120,16 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
-    output_dim = 1024
+    output_dim = 128
     nb_classes = len(functions)
     start_time = time.time()
-    print "Loading Data"
+    logging.info("Loading Data")
     train, val, test = load_data()
     train_labels, train_data = train
     val_labels, val_data = val
     test_labels, test_data = test
-    print val_labels.shape, val_data.shape
-    print train_labels.shape, train_data.shape
-    print "Data loaded in %d sec" % (time.time() - start_time)
-    print "Building the model"
+    logging.info("Data loaded in %d sec" % (time.time() - start_time))
+    logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32')
     feature_model = get_feature_model()(inputs)
     go[GO_ID]['model'] = BatchNormalization()(feature_model)
@@ -150,26 +150,27 @@ def model():
         go[go_id]['output'] = output
         for ch_id in go[go_id]['children']:
             if ch_id in func_set and 'model' not in go[ch_id]:
-                q.append((ch_id, dim / 2))
-    print 'Min dim', min_dim
+                q.append((ch_id, dim))
+    logging.info('Min dim %d' % min_dim)
     output_models = [None] * nb_classes
     for i in range(len(functions)):
         output_models[i] = go[functions[i]]['output']
 
     model = Model(input=inputs, output=output_models)
-    print 'Model built in %d sec' % (time.time() - start_time)
-    print 'Compiling the model'
+    logging.info('Model built in %d sec' % (time.time() - start_time))
+    logging.info('Compiling the model')
     model.compile(
         optimizer='rmsprop',
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_mf.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_cc.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=5, verbose=1)
-    print 'Compilation finished in %d sec' % (time.time() - start_time)
-    print 'Starting training the model'
+    logging.info(
+        'Compilation finished in %d sec' % (time.time() - start_time))
+    logging.info('Starting training the model')
 
     train_generator = DataGenerator(batch_size, nb_classes)
     train_generator.fit(train_data, train_labels)
@@ -185,7 +186,7 @@ def model():
         max_q_size=batch_size,
         callbacks=[checkpointer, earlystopper])
 
-    print 'Loading weights'
+    logging.info('Loading weights')
     model.load_weights(model_path)
     output_test = []
     for i in range(len(functions)):
@@ -212,11 +213,11 @@ def model():
                 prot_res[j]['fp'] += 1
             elif pred[j] == 0 and test[j] == 1:
                 prot_res[j]['fn'] += 1
-        print functions[i]
-        print classification_report(test, pred)
+        logging.info(functions[i])
+        logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-mf.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-cc.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']
@@ -239,10 +240,10 @@ def model():
                 if recall + precision != 0:
                     fs += 2 * precision * recall / (precision + recall)
                 n += 1
-    print 'Protein centric F measure: \t', fs / n, n
-    print 'Test loss:\t', score[0]
-    print 'Test accuracy:\t', score[1]
-    print 'Done in %d sec' % (time.time() - start_time)
+    logging.info('Protein centric F measure: \t', fs / n, n)
+    logging.info('Test loss:\t', score[0])
+    logging.info('Test accuracy:\t', score[1])
+    logging.info('Done in %d sec' % (time.time() - start_time))
 
 
 def print_report(report, go_id):

@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 """
-OMP_NUM_THREADS=32 THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python nn_hierarchical_yeast.py
-KERAS_BACKEND=tensorflow python nn_hierarchical_yeast.py
+KERAS_BACKEND=tensorflow python nn_hierarchical_tf.py
 """
 
 import numpy as np
@@ -37,10 +36,10 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/yeast/'
+DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
-go = get_gene_ontology('goslim_yeast.obo')
+go = get_gene_ontology('go.obo')
 
 
 func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
@@ -121,7 +120,7 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
-    output_dim = 1024
+    output_dim = 128
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
