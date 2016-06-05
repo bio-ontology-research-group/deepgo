@@ -13,12 +13,12 @@ from aaindex import AAINDEX
 
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = 'test.txt'
-GO_ID = BIOLOGICAL_PROCESS
+FILENAME = 'train.txt'
+GO_ID = CELLULAR_COMPONENT
 
 go = get_gene_ontology('go.obo')
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 print len(functions)
@@ -70,7 +70,7 @@ def main(*args, **kwargs):
         'gos': gos,
         'labels': labels}
     df = pd.DataFrame(data)
-    df.to_pickle(DATA_ROOT + 'test-bp.pkl')
+    df.to_pickle(DATA_ROOT + 'train-cc.pkl')
     print functions
 
     # with open('data/go-weights.txt', 'r') as f:

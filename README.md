@@ -9,4 +9,4 @@
 ## Filtered GO classes by number of annotations
 * Molecular functions - 50
 * Biological processes - 200
-* Cellular components - 10
+* Cellular components - 10, 50
