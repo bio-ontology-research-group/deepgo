@@ -24,7 +24,8 @@ from utils import (
     BIOLOGICAL_PROCESS,
     MOLECULAR_FUNCTION,
     CELLULAR_COMPONENT,
-    DataGenerator)
+    DataGenerator,
+    get_node_name)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
 import sys
@@ -108,12 +109,22 @@ def get_feature_model():
 
 
 def get_function_node(go_id, parent_models, output_dim):
+    ind = go_indexes[go_id]
+    name = get_node_name(ind * 2)
+    output_name = get_node_name(ind * 2 + 1)
     if len(parent_models) == 1:
-        dense = Dense(output_dim, activation='relu')(parent_models[0])
+        dense = Dense(
+            output_dim,
+            activation='relu',
+            name=name)(parent_models[0])
     else:
-        merged_parent_models = merge(parent_models, mode='concat')
-        dense = Dense(output_dim, activation='relu')(merged_parent_models)
-    output = Dense(1, activation='sigmoid')(dense)
+        merged_parent_models = merge(
+            parent_models, mode='concat')
+        dense = Dense(
+            output_dim,
+            activation='relu',
+            name=name)(merged_parent_models)
+    output = Dense(1, activation='sigmoid', name=output_name)(dense)
     return dense, output
 
 
@@ -131,12 +142,15 @@ def model():
     test_labels, test_data = test
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Building the model")
-    inputs = Input(shape=(MAXLEN,), dtype='int32')
+    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input')
     feature_model = get_feature_model()(inputs)
     go[GO_ID]['model'] = BatchNormalization()(feature_model)
     q = deque()
+    used = set()
     for go_id in go[GO_ID]['children']:
-        q.append((go_id, output_dim))
+        if go_id in func_set:
+            q.append((go_id, output_dim))
+            used.add(go_id)
     min_dim = output_dim
     while len(q) > 0:
         go_id, dim = q.popleft()
@@ -150,8 +164,9 @@ def model():
         go[go_id]['model'] = dense
         go[go_id]['output'] = output
         for ch_id in go[go_id]['children']:
-            if ch_id in func_set and 'model' not in go[ch_id]:
+            if ch_id in func_set and ch_id not in used:
                 q.append((ch_id, dim))
+                used.add(ch_id)
     logging.info('Min dim %d' % min_dim)
     output_models = [None] * nb_classes
     for i in range(len(functions)):

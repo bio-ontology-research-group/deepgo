@@ -2,10 +2,21 @@ import numpy as np
 from collections import deque
 from sklearn.preprocessing import OneHotEncoder
 from aaindex import AAINDEX
+import string
 
 BIOLOGICAL_PROCESS = 'GO:0008150'
 MOLECULAR_FUNCTION = 'GO:0003674'
 CELLULAR_COMPONENT = 'GO:0005575'
+DIGITS = string.digits + string.letters
+BASE = len(DIGITS)
+
+
+def get_node_name(n):
+    ret = ''
+    while n > 0:
+        ret = ret + DIGITS[n % BASE]
+        n /= BASE
+    return ret
 
 
 class DataGenerator(object):
