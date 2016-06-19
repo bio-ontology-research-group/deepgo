@@ -109,8 +109,9 @@ def get_feature_model():
 
 def get_function_node(go_id, parent_models, output_dim):
     ind = go_indexes[go_id]
-    name = get_node_name(ind * 2)
-    output_name = get_node_name(ind * 2 + 1)
+    name = get_node_name(ind * 3)
+    output_name = get_node_name(ind * 3 + 1)
+    merge_name = get_node_name(ind * 3 + 2)
     if len(parent_models) == 1:
         dense = Dense(
             output_dim,
@@ -118,7 +119,7 @@ def get_function_node(go_id, parent_models, output_dim):
             name=name)(parent_models[0])
     else:
         merged_parent_models = merge(
-            parent_models, mode='concat')
+            parent_models, mode='concat', name=merge_name)
         dense = Dense(
             output_dim,
             activation='relu',

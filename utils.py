@@ -12,6 +12,8 @@ BASE = len(DIGITS)
 
 
 def get_node_name(n):
+    if n == 0:
+        return '0'
     ret = ''
     while n > 0:
         ret = ret + DIGITS[n % BASE]

@@ -16,7 +16,7 @@ from multiprocessing import Pool
 
 DATA_ROOT = 'data/swiss/'
 FILENAME = 'train.txt'
-ANNOT_NUM = 500
+ANNOT_NUM = 700
 GO_ID = BIOLOGICAL_PROCESS
 
 go = get_gene_ontology('go.obo')

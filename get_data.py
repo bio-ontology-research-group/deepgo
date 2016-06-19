@@ -13,7 +13,7 @@ from aaindex import AAINDEX
 
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = 'test.txt'
+FILENAME = 'train.txt'
 GO_ID = BIOLOGICAL_PROCESS
 
 go = get_gene_ontology('go.obo')
@@ -70,7 +70,7 @@ def main(*args, **kwargs):
         'gos': gos,
         'labels': labels}
     df = pd.DataFrame(data)
-    df.to_pickle(DATA_ROOT + 'test-bp.pkl')
+    df.to_pickle(DATA_ROOT + 'train-bp.pkl')
     print functions
 
     # with open('data/go-weights.txt', 'r') as f:
