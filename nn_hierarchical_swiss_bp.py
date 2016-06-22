@@ -174,6 +174,10 @@ def model():
 
     model = Model(input=inputs, output=output_models)
     logging.info('Model built in %d sec' % (time.time() - start_time))
+    logging.info('Saving the model')
+    model_json = model.to_json()
+    with open(DATA_ROOT + 'model_bp.json', 'w') as f:
+        f.write(model_json)
     logging.info('Compiling the model')
     model.compile(
         optimizer='rmsprop',
