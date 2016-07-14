@@ -274,9 +274,7 @@ def print_report(report, go_id):
 
 
 def main(*args, **kwargs):
-    import tensorflow as tf
-    with tf.device('/gpu:1'):
-        model()
+    model()
 
 if __name__ == '__main__':
     main(*sys.argv)
