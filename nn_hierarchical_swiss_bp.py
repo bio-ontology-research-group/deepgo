@@ -53,7 +53,7 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-bp.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train-all-bp.pkl')
     test_df = pd.read_pickle(DATA_ROOT + 'test-bp.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
@@ -184,7 +184,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_bp.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_all_bp.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=5, verbose=1)

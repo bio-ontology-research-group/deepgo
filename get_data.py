@@ -13,12 +13,12 @@ from aaindex import AAINDEX
 
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = 'train.txt'
-GO_ID = BIOLOGICAL_PROCESS
+FILENAME = 'train_all.txt'
+GO_ID = CELLULAR_COMPONENT
 
 go = get_gene_ontology('go.obo')
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 print len(functions)
@@ -41,10 +41,12 @@ def load_data():
             for go_id in go_list:
                 if go_id in func_set:
                     go_set |= get_anchestors(go, go_id)
-            if not go_set or GO_ID not in go_set:
-                continue
-            go_set.remove('root')
-            go_set.remove(GO_ID)
+            # if not go_set or GO_ID not in go_set:
+            #     continue
+            if 'root' in go_set:
+                go_set.remove('root')
+            if GO_ID in go_set:
+                go_set.remove(GO_ID)
             gos.append(go_list)
             proteins.append(items[0])
             sequences.append(items[1])
@@ -70,8 +72,7 @@ def main(*args, **kwargs):
         'gos': gos,
         'labels': labels}
     df = pd.DataFrame(data)
-    df.to_pickle(DATA_ROOT + 'train-bp.pkl')
-    print functions
+    df.to_pickle(DATA_ROOT + 'train-all-cc.pkl')
 
     # with open('data/go-weights.txt', 'r') as f:
     #     for line in f:

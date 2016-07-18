@@ -46,15 +46,15 @@ def main():
     print 'Loading all proteins'
     all_prots = load_all_proteins()
     shuffle(all_prots)
-    split = 0.8
+    split = 1.0
     train_len = int(len(all_prots) * split)
 
-    with open(RESULT_ROOT + 'train.txt', 'w') as f:
+    with open(RESULT_ROOT + 'train_all.txt', 'w') as f:
         for prot_id, seq, gos in all_prots[:train_len]:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
-    with open(RESULT_ROOT + 'test.txt', 'w') as f:
-        for prot_id, seq, gos in all_prots[train_len:]:
-            f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
+    # with open(RESULT_ROOT + 'test.txt', 'w') as f:
+    #     for prot_id, seq, gos in all_prots[train_len:]:
+    #         f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
 
     end_time = time.time() - start_time
     print 'Done in %d seconds' % (end_time, )
