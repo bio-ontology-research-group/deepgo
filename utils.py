@@ -321,3 +321,13 @@ def shuffle(*args, **kwargs):
 
 
 # get_disjoint_sets(get_gene_ontology(), CELLULAR_COMPONENT)
+
+def get_statistics():
+    go = get_gene_ontology('goslim_yeast.obo')
+    print len(go)
+    bp = get_go_set(go, BIOLOGICAL_PROCESS)
+    mf = get_go_set(go, MOLECULAR_FUNCTION)
+    cc = get_go_set(go, CELLULAR_COMPONENT)
+    print len(bp), len(mf), len(cc)
+
+# get_statistics()

@@ -15,9 +15,9 @@ from multiprocessing import Pool
 
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = 'train.txt'
-ANNOT_NUM = 700
-GO_ID = BIOLOGICAL_PROCESS
+FILENAME = 'train_human.txt'
+ANNOT_NUM = 50
+GO_ID = CELLULAR_COMPONENT
 
 go = get_gene_ontology('go.obo')
 # functions = get_go_sets(
@@ -76,7 +76,7 @@ def get_functions():
             filtered.append(go_id)
     print len(filtered)
     df = pd.DataFrame({'functions': filtered})
-    df.to_pickle(DATA_ROOT + 'bp.pkl')
+    df.to_pickle(DATA_ROOT + 'cc-human.pkl')
 
 
 def main(*args, **kwargs):
