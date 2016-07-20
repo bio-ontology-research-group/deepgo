@@ -13,12 +13,15 @@ from aaindex import AAINDEX
 
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = 'test_human.txt'
+FILENAME = 'test_mouse.txt'
 GO_ID = CELLULAR_COMPONENT
 
 go = get_gene_ontology('go.obo')
+# BP = get_go_set(go, BIOLOGICAL_PROCESS)
+# MF = get_go_set(go, MOLECULAR_FUNCTION)
+# CC = get_go_set(go, CELLULAR_COMPONENT)
 
-func_df = pd.read_pickle(DATA_ROOT + 'cc-human.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc-mouse.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 print len(functions)
@@ -33,10 +36,21 @@ def load_data():
     gos = list()
     labels = list()
     indexes = list()
+    bp = set()
+    mf = set()
+    cc = set()
     with open(DATA_ROOT + FILENAME, 'r') as f:
         for line in f:
             items = line.strip().split('\t')
             go_list = items[2].split('; ')
+            # for go_id in go_list:
+            #     if go_id in BP:
+            #         bp.add(go_id)
+            #     elif go_id in MF:
+            #         mf.add(go_id)
+            #     elif go_id in CC:
+            #         cc.add(go_id)
+
             go_set = set()
             for go_id in go_list:
                 if go_id in func_set:
@@ -57,6 +71,7 @@ def load_data():
                 if go_id in go_indexes:
                     label[go_indexes[go_id]] = 1
             labels.append(label)
+    # print len(bp), len(mf), len(cc)
 
     return proteins, sequences, indexes, gos, labels
 
@@ -70,7 +85,7 @@ def main(*args, **kwargs):
         'gos': gos,
         'labels': labels}
     df = pd.DataFrame(data)
-    df.to_pickle(DATA_ROOT + 'test-human-cc.pkl')
+    df.to_pickle(DATA_ROOT + 'test-mouse-cc.pkl')
 
     # with open('data/go-weights.txt', 'r') as f:
     #     for line in f:

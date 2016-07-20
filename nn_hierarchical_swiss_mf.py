@@ -43,7 +43,7 @@ GO_ID = MOLECULAR_FUNCTION
 go = get_gene_ontology('go.obo')
 
 
-func_df = pd.read_pickle(DATA_ROOT + 'mf-human.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'mf-mouse.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 logging.info(len(functions))
@@ -53,8 +53,8 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-human-mf.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test-human-mf.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train-mouse-mf.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test-mouse-mf.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -176,7 +176,7 @@ def model():
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_mf_human.json', 'w') as f:
+    with open(DATA_ROOT + 'model_mf_mouse.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     model.compile(
@@ -184,7 +184,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_mf_human.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_mf_mouse.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=5, verbose=1)
@@ -237,7 +237,7 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-mf-human.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-mf-mouse.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']

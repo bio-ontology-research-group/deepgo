@@ -10,16 +10,79 @@ from utils import (
     MOLECULAR_FUNCTION,
     BIOLOGICAL_PROCESS,
     CELLULAR_COMPONENT)
+from keras.models import model_from_json
+from keras.preprocessing import sequence
+from sklearn.metrics import classification_report
+import logging
 
-DATA_ROOT = 'data/swiss/model-bp-1260/'
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+sys.setrecursionlimit(100000)
 
+DATA_ROOT = 'data/swiss/'
+MAXLEN = 1000
 GO_ID = BIOLOGICAL_PROCESS
 
 go = get_gene_ontology('go.obo')
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc-human.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
+
+
+def predict():
+    test_df = pd.read_pickle(DATA_ROOT + 'train-human-cc.pkl')
+    data = test_df['indexes'].values
+    data = sequence.pad_sequences(data, maxlen=MAXLEN)
+    labels = test_df['labels'].values
+    shape = labels.shape
+    labels = np.hstack(labels).reshape(shape[0], len(functions))
+    labels = labels.transpose()
+    batch_size = 128
+    logging.info('Loading model')
+    with open(DATA_ROOT + 'model_cc_human.json', 'r') as f:
+        json_string = next(f)
+    model = model_from_json(json_string)
+    model.compile(
+        optimizer='rmsprop',
+        loss='binary_crossentropy',
+        metrics=['accuracy'])
+    logging.info('Loading weights')
+    model.load_weights(DATA_ROOT + 'hierarchical_cc_human.hdf5')
+
+    predictions = model.predict(
+        data, batch_size=batch_size, verbose=1)
+    prot_res = list()
+    for i in range(len(data)):
+        prot_res.append({
+            'tp': 0.0, 'fp': 0.0, 'fn': 0.0,
+            'pred': list(), 'test': list()})
+    for i in range(len(functions)):
+        rpred = predictions[i].flatten()
+        pred = np.round(rpred)
+        test = labels[i]
+        for j in range(len(pred)):
+            if pred[j] == 1 and test[j] == 1:
+                prot_res[j]['tp'] += 1
+            elif pred[j] == 1 and test[j] == 0:
+                prot_res[j]['fp'] += 1
+            elif pred[j] == 0 and test[j] == 1:
+                prot_res[j]['fn'] += 1
+        logging.info(functions[i])
+        logging.info(classification_report(test, pred))
+    fs = 0.0
+    n = 0
+    for prot in prot_res:
+        tp = prot['tp']
+        fp = prot['fp']
+        fn = prot['fn']
+        if tp == 0.0 and fp == 0.0 and fn == 0.0:
+            continue
+        if tp != 0.0:
+            recall = tp / (1.0 * (tp + fn))
+            precision = tp / (1.0 * (tp + fp))
+            fs += 2 * precision * recall / (precision + recall)
+        n += 1
+    logging.info('Protein centric F measure: \t %f %d' % (fs / n, n))
 
 
 def compute_total_performance():
@@ -51,7 +114,6 @@ def compute_total_performance():
             for go_id in gos:
                 if go_id not in func_set and go_id in all_functions:
                     fn += 1
-
             for i in range(len(preds)):
                 if tests[i] == 1 and preds[i] == 1:
                     tp += 1
@@ -104,7 +166,7 @@ def compute_performance():
 
 
 def main(*args, **kwargs):
-    compute_total_performance()
+    predict()
 
 if __name__ == '__main__':
     main(*sys.argv)
