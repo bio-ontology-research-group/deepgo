@@ -13,7 +13,7 @@ from aaindex import AAINDEX
 
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = 'test_mouse.txt'
+FILENAME = 'train_yeast.txt'
 GO_ID = CELLULAR_COMPONENT
 
 go = get_gene_ontology('go.obo')
@@ -21,7 +21,7 @@ go = get_gene_ontology('go.obo')
 # MF = get_go_set(go, MOLECULAR_FUNCTION)
 # CC = get_go_set(go, CELLULAR_COMPONENT)
 
-func_df = pd.read_pickle(DATA_ROOT + 'cc-mouse.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc-yeast.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 print len(functions)
@@ -85,7 +85,7 @@ def main(*args, **kwargs):
         'gos': gos,
         'labels': labels}
     df = pd.DataFrame(data)
-    df.to_pickle(DATA_ROOT + 'test-mouse-cc.pkl')
+    df.to_pickle(DATA_ROOT + 'train-yeast-cc.pkl')
 
     # with open('data/go-weights.txt', 'r') as f:
     #     for line in f:
