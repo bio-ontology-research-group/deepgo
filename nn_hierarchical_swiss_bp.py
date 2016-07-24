@@ -43,7 +43,7 @@ GO_ID = BIOLOGICAL_PROCESS
 go = get_gene_ontology('go.obo')
 
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp-yeast.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'bp-all.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 logging.info(len(functions))
@@ -53,8 +53,8 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-yeast-bp.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test-yeast-bp.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train-all-bp.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test-all-bp.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -176,7 +176,7 @@ def model():
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_bp_yeast.json', 'w') as f:
+    with open(DATA_ROOT + 'model_bp_all.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     model.compile(
@@ -184,10 +184,10 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_bp_yeast.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_bp_all.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
-    earlystopper = EarlyStopping(monitor='val_loss', patience=5, verbose=1)
+    earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))
     logging.info('Starting training the model')
@@ -237,7 +237,7 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-bp-yeast.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-bp-all.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']

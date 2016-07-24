@@ -8,5 +8,13 @@
 
 ## Filtered GO classes by number of annotations
 * Molecular functions - 50
-* Biological processes - 200
+* Biological processes - 700
 * Cellular components - 10, 50
+
+
+## Performance reports training/testing - BP, MF, CC
+* 80/20 - 0.726916 68983, 0.821645 82755, 0.769770 75901
+* 80/20 All functions - 0.718112 68983, 0.754920 82755, 0.669771 75901
+* All/Human -
+* All/Mouse -
+* All/Yeast -

@@ -18,28 +18,29 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/swiss/model-cc-783/'
 MAXLEN = 1000
 GO_ID = BIOLOGICAL_PROCESS
 
 go = get_gene_ontology('go.obo')
 
-func_df = pd.read_pickle(DATA_ROOT + 'cc-human.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 
 
 def predict():
-    test_df = pd.read_pickle(DATA_ROOT + 'train-human-cc.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test-cc.pkl')
     data = test_df['indexes'].values
     data = sequence.pad_sequences(data, maxlen=MAXLEN)
     labels = test_df['labels'].values
     shape = labels.shape
     labels = np.hstack(labels).reshape(shape[0], len(functions))
     labels = labels.transpose()
-    batch_size = 128
+    batch_size = 512
+    all_functions = get_go_set(go, GO_ID)
     logging.info('Loading model')
-    with open(DATA_ROOT + 'model_cc_human.json', 'r') as f:
+    with open(DATA_ROOT + 'model_cc.json', 'r') as f:
         json_string = next(f)
     model = model_from_json(json_string)
     model.compile(
@@ -47,7 +48,7 @@ def predict():
         loss='binary_crossentropy',
         metrics=['accuracy'])
     logging.info('Loading weights')
-    model.load_weights(DATA_ROOT + 'hierarchical_cc_human.hdf5')
+    model.load_weights(DATA_ROOT + 'hierarchical_cc.hdf5')
 
     predictions = model.predict(
         data, batch_size=batch_size, verbose=1)
@@ -55,7 +56,7 @@ def predict():
     for i in range(len(data)):
         prot_res.append({
             'tp': 0.0, 'fp': 0.0, 'fn': 0.0,
-            'pred': list(), 'test': list()})
+            'pred': list(), 'test': list(), 'gos': test_df['gos'][i]})
     for i in range(len(functions)):
         rpred = predictions[i].flatten()
         pred = np.round(rpred)
@@ -75,6 +76,9 @@ def predict():
         tp = prot['tp']
         fp = prot['fp']
         fn = prot['fn']
+        for go_id in prot['gos']:
+            if go_id not in func_set and go_id in all_functions:
+                fn += 1
         if tp == 0.0 and fp == 0.0 and fn == 0.0:
             continue
         if tp != 0.0:
@@ -166,7 +170,9 @@ def compute_performance():
 
 
 def main(*args, **kwargs):
-    predict()
+    import tensorflow as tf
+    with tf.device('/gpu:1'):
+        predict()
 
 if __name__ == '__main__':
     main(*sys.argv)
