@@ -41,7 +41,7 @@ DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = BIOLOGICAL_PROCESS
 go = get_gene_ontology('go.obo')
-
+ORG = '-human'
 
 func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
 functions = func_df['functions'].values
@@ -53,8 +53,8 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-human-bp.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'train-human-bp.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train' + ORG + '-bp.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test' + ORG + '-bp.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -184,7 +184,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_bp_human.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_bp' + ORG + '.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
@@ -237,7 +237,7 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-bp-human.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-bp' + ORG + '.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']

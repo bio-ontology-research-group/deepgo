@@ -41,6 +41,7 @@ DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
 go = get_gene_ontology('go.obo')
+ORG = '-human'
 
 
 func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
@@ -53,8 +54,8 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train-human-mf.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'train-human-mf.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train' + ORG + '-mf.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test' + ORG + '-mf.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -184,7 +185,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_mf_human.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_mf' + ORG + '.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
@@ -237,7 +238,7 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-mf-human.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-mf' + ORG + '.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']
