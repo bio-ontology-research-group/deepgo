@@ -170,9 +170,7 @@ def compute_performance():
 
 
 def main(*args, **kwargs):
-    import tensorflow as tf
-    with tf.device('/gpu:1'):
-        predict()
+    predict()
 
 if __name__ == '__main__':
     main(*sys.argv)
