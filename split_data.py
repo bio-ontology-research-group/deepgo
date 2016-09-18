@@ -7,10 +7,9 @@ from utils import shuffle, get_gene_ontology
 from aaindex import INVALID_ACIDS
 
 
-DATA_ROOT = 'data/'
-RESULT_ROOT = 'data/swiss/'
-FILES = (
-    'uniprot-swiss.txt',)
+DATA_ROOT = 'data/human/'
+RESULT_ROOT = 'data/human/'
+FILE_NAME = 'uniprot_human.txt'
 
 
 MINLEN = 25
@@ -28,16 +27,20 @@ def is_ok(seq):
 
 def load_all_proteins():
     prots = list()
-    for i in range(len(FILES)):
-        file_name = FILES[i]
-        with open(DATA_ROOT + file_name, 'r') as f:
-            for line in f:
-                line = line.strip().split('\t')
-                prot_id = line[0]
-                seq = line[1]
-                gos = line[2]
-                if is_ok(seq):
-                    prots.append((prot_id, seq, gos))
+    rep_prots = set()
+    with open(DATA_ROOT + 'prots.txt', 'r') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            rep_prots.add(it[0])
+
+    with open(DATA_ROOT + FILE_NAME, 'r') as f:
+        for line in f:
+            line = line.strip().split('\t')
+            prot_id = line[0]
+            seq = line[1]
+            gos = line[2]
+            if prot_id in rep_prots and is_ok(seq):
+                prots.append((prot_id, seq, gos))
     return prots
 
 
@@ -46,15 +49,15 @@ def main():
     print 'Loading all proteins'
     all_prots = load_all_proteins()
     shuffle(all_prots)
-    split = 1.0
+    split = 0.8
     train_len = int(len(all_prots) * split)
 
-    with open(RESULT_ROOT + 'train_all.txt', 'w') as f:
+    with open(RESULT_ROOT + 'train.txt', 'w') as f:
         for prot_id, seq, gos in all_prots[:train_len]:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
-    # with open(RESULT_ROOT + 'test.txt', 'w') as f:
-    #     for prot_id, seq, gos in all_prots[train_len:]:
-    #         f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
+    with open(RESULT_ROOT + 'test.txt', 'w') as f:
+        for prot_id, seq, gos in all_prots[train_len:]:
+            f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
 
     end_time = time.time() - start_time
     print 'Done in %d seconds' % (end_time, )

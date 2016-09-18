@@ -41,10 +41,10 @@ DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
 go = get_gene_ontology('go.obo')
-ORG = '-human'
+ORG = ''
 
 
-func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'mf' + ORG + '.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 logging.info(len(functions))
@@ -177,7 +177,7 @@ def model():
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_mf.json', 'w') as f:
+    with open(DATA_ROOT + 'model_mf' + ORG + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     model.compile(

@@ -16,7 +16,7 @@ FILES = (
 MINLEN = 25
 MAXLEN = 1000
 
-ORG_ID = '83333'
+ORG_ID = '284812'
 
 
 def is_ok(seq):
@@ -70,10 +70,10 @@ def main():
             train_prots.append(item)
         else:
             test_prots.append(item)
-    with open(RESULT_ROOT + 'train_ecoli.txt', 'w') as f:
+    with open(RESULT_ROOT + 'train_pombe.txt', 'w') as f:
         for prot_id, seq, gos in train_prots:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
-    with open(RESULT_ROOT + 'test_ecoli.txt', 'w') as f:
+    with open(RESULT_ROOT + 'test_pombe.txt', 'w') as f:
         for prot_id, seq, gos in test_prots:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
 

@@ -31,6 +31,9 @@ class DataGenerator(object):
         self.start = 0
         self.inputs = inputs
         self.targets = targets
+        self.size = len(self.inputs)
+        if isinstance(self.inputs, tuple):
+            self.size = len(self.inputs[0])
 
     def __next__(self):
         return self.next()
@@ -39,18 +42,72 @@ class DataGenerator(object):
         self.start = 0
 
     def next(self):
-        if self.start < len(self.inputs):
+        if self.start < self.size:
             output = []
             labels = self.targets
             for i in range(self.num_outputs):
                 output.append(
                     labels[i, self.start:(self.start + self.batch_size)])
-            res_inputs = self.inputs[self.start:(self.start + self.batch_size)]
+            if isinstance(self.inputs, tuple):
+                res_inputs = []
+                for inp in self.inputs:
+                    res_inputs.append(
+                        inp[self.start:(self.start + self.batch_size)])
+            else:
+                res_inputs = self.inputs[self.start:(
+                    self.start + self.batch_size)]
             self.start += self.batch_size
             return (res_inputs, output)
         else:
             self.reset()
             return self.next()
+
+
+def get_ipro():
+    ipro = dict()
+    ipros = list()
+    with open('data/interpro.txt', 'r') as f:
+        for line in f:
+            items = line.strip().split('::')
+            ipros.append(items)
+
+    def read_tree(parent, i):
+        level = ipros[i][0].rfind('-')
+        ipro_id = ipros[i][0][level + 1:]
+        name = ipros[i][1]
+        obj = {'id': ipro_id, 'name': name, 'children': list(), 'parent': None}
+        if parent is not None:
+            parent['children'].append(ipro_id)
+            obj['parent'] = parent['id']
+        ipro[ipro_id] = obj
+        if i + 1 < len(ipros):
+            next_ipro_level = ipros[i + 1][0].rfind('-')
+            if next_ipro_level == -1:
+                return
+            elif level < next_ipro_level:
+                read_tree(obj, i + 1)
+            elif level == next_ipro_level:
+                read_tree(parent, i + 1)
+            elif ipro[parent['parent']] is not None:
+                read_tree(ipro[parent['parent']], i + 1)
+    for i in range(len(ipros)):
+        if ipros[i][0].rfind('-') == -1:
+            read_tree(None, i)
+    return ipro
+
+
+def get_ipro_anchestors(ipro, ipro_id):
+    ipro_set = set()
+    q = deque()
+    q.append(ipro_id)
+    while(len(q) > 0):
+        i_id = q.popleft()
+        ipro_set.add(i_id)
+        if ipro[i_id]['parent']:
+            for parent_id in ipro[i_id]['parent']:
+                if parent_id in ipro:
+                    q.append(parent_id)
+    return ipro_set
 
 
 def get_gene_ontology(filename='go.obo'):
@@ -81,6 +138,9 @@ def get_gene_ontology(filename='go.obo'):
                     obj['id'] = l[1]
                 elif l[0] == 'is_a':
                     obj['is_a'].append(l[1].split(' ! ')[0])
+                elif l[0] == 'name':
+                    obj['name'] = l[1]
+
                 # elif l[0] == 'relationship':
                 #     r = l[1].split(' ')
                 #     if r[0] == 'part_of':
@@ -331,3 +391,4 @@ def get_statistics():
     print len(bp), len(mf), len(cc)
 
 # get_statistics()
+# get_ipro()

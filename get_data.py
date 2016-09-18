@@ -14,17 +14,17 @@ from aaindex import AAINDEX
 
 GO_ID = BIOLOGICAL_PROCESS
 FUNCTION = 'bp'
-ORG = 'yeast'
-TT = 'test'
+ORG = ''
+TT = 'train'
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = TT + '_' + ORG + '.txt'
+FILENAME = TT + ORG + '.txt'
 
 go = get_gene_ontology('go.obo')
 
-func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
+func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
 functions = func_df['functions'].values
-func_set = set(functions)
+func_set = get_go_set(go, GO_ID)
 print len(functions)
 go_indexes = dict()
 for ind, go_id in enumerate(functions):
@@ -65,6 +65,17 @@ def load_data():
     return proteins, sequences, indexes, gos, labels
 
 
+def load_rep():
+    data = dict()
+    with open(DATA_ROOT + 'prots.txt', 'r') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            prot_id = it[0]
+            rep = np.array(map(float, it[1:]))
+            data[prot_id] = rep
+    return data
+
+
 def main(*args, **kwargs):
     proteins, sequences, indexes, gos, labels = load_data()
     data = {
@@ -73,8 +84,13 @@ def main(*args, **kwargs):
         'indexes': indexes,
         'gos': gos,
         'labels': labels}
+    # rep = load_rep()
+    # rep_list = list()
+    # for prot_id in proteins:
+    #     rep_list.append(rep[prot_id])
+    # data['rep'] = rep_list
     df = pd.DataFrame(data)
-    df.to_pickle(DATA_ROOT + TT + '-' + ORG + '-' + FUNCTION + '.pkl')
+    df.to_pickle(DATA_ROOT + TT + ORG + '-' + FUNCTION + '.pkl')
 
     # with open('data/go-weights.txt', 'r') as f:
     #     for line in f:
