@@ -24,7 +24,7 @@
 * All/Fly - 0.342000 1873, 0.426006 2145, 0.497306 2476
 
 # Second experiments with organism specific functions
-* All/Fly , ,0.524430 2524
+* All/Fly ,0.462496 2322 ,0.524430 2524
 
 
 ## Performance of top level functions

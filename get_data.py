@@ -11,14 +11,26 @@ from utils import (
     CELLULAR_COMPONENT)
 from aaindex import AAINDEX
 
-
-GO_ID = BIOLOGICAL_PROCESS
-FUNCTION = 'bp'
-ORG = ''
+FUNCTION = 'cc'
+ORG = '-human'
 TT = 'train'
 
+args = sys.argv
+if len(args) == 4:
+    print args
+    TT = args[1]
+    ORG = '-' + args[2]
+    FUNCTION = args[3]
+
+FUNC_DICT = {
+    'cc': CELLULAR_COMPONENT,
+    'mf': MOLECULAR_FUNCTION,
+    'bp': BIOLOGICAL_PROCESS}
+
+GO_ID = FUNC_DICT[FUNCTION]
+
 DATA_ROOT = 'data/swiss/'
-FILENAME = TT + ORG + '.txt'
+FILENAME = TT + '.txt'
 
 go = get_gene_ontology('go.obo')
 

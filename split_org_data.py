@@ -16,7 +16,7 @@ FILES = (
 MINLEN = 25
 MAXLEN = 1000
 
-ORG_ID = '284812'
+ORG_ID = '44689'
 
 
 def is_ok(seq):
@@ -61,19 +61,13 @@ def main():
     print 'Loading all proteins'
     all_prots = load_all_proteins()
     shuffle(all_prots)
-    train_prots = list()
     test_prots = list()
     org_prots = get_org_prots()
     for item in all_prots:
         prot_id, seq, gos = item
-        if prot_id not in org_prots:
-            train_prots.append(item)
-        else:
+        if prot_id in org_prots:
             test_prots.append(item)
-    with open(RESULT_ROOT + 'train_pombe.txt', 'w') as f:
-        for prot_id, seq, gos in train_prots:
-            f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
-    with open(RESULT_ROOT + 'test_pombe.txt', 'w') as f:
+    with open(RESULT_ROOT + 'proteins-mold.txt', 'w') as f:
         for prot_id, seq, gos in test_prots:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
 

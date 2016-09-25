@@ -41,7 +41,7 @@ DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
 go = get_gene_ontology('go.obo')
-ORG = ''
+ORG = '-fly'
 
 
 func_df = pd.read_pickle(DATA_ROOT + 'mf' + ORG + '.pkl')

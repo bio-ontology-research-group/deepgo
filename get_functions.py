@@ -15,10 +15,11 @@ from multiprocessing import Pool
 
 
 DATA_ROOT = 'data/swiss/'
-FILENAME = 'test-fly.txt'
-ANNOT_NUM = 10
-GO_ID = MOLECULAR_FUNCTION
-FUNCTION = 'mf-fly'
+ORG = '-worm'
+FILENAME = 'proteins' + ORG + '.txt'
+ANNOT_NUM = 1
+GO_ID = CELLULAR_COMPONENT
+FUNCTION = 'cc' + ORG
 
 go = get_gene_ontology('go.obo')
 # functions = get_go_sets(
@@ -78,6 +79,7 @@ def get_functions():
     print len(filtered)
     df = pd.DataFrame({'functions': filtered})
     df.to_pickle(DATA_ROOT + FUNCTION + '.pkl')
+    print 'Saved ' + DATA_ROOT + FUNCTION + '.pkl'
 
 
 def main(*args, **kwargs):

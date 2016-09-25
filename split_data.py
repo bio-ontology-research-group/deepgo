@@ -7,9 +7,9 @@ from utils import shuffle, get_gene_ontology
 from aaindex import INVALID_ACIDS
 
 
-DATA_ROOT = 'data/human/'
-RESULT_ROOT = 'data/human/'
-FILE_NAME = 'uniprot_human.txt'
+DATA_ROOT = 'data/swiss/'
+RESULT_ROOT = 'data/swiss/'
+FILE_NAME = 'uniprot_swiss.tab'
 
 
 MINLEN = 25
