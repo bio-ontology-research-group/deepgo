@@ -41,7 +41,7 @@ DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = BIOLOGICAL_PROCESS
 go = get_gene_ontology('go.obo')
-ORG = '-fly'
+ORG = '-yeast'
 
 func_df = pd.read_pickle(DATA_ROOT + 'bp' + ORG + '.pkl')
 functions = func_df['functions'].values

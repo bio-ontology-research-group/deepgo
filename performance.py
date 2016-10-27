@@ -22,14 +22,14 @@ sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/swiss/done/'
 MAXLEN = 1000
-GO_ID = CELLULAR_COMPONENT
-FUNCTION = 'cc'
-ORG = ''
+GO_ID = BIOLOGICAL_PROCESS
+FUNCTION = 'bp'
+ORG = '-fly'
 
 go = get_gene_ontology('go.obo')
 ipro = get_ipro()
 
-func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
+func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 
@@ -65,15 +65,15 @@ def predict():
     labels = test_df['labels'].values
     shape = labels.shape
     labels = np.hstack(labels).reshape(shape[0], len(functions))
-    for label in labels:
-        for i in range(len(label)):
-            if label[i] == 1 and functions[i] not in test_funcs:
-                print functions[i]
+    # for label in labels:
+    #     for i in range(len(label)):
+    #         if label[i] == 1 and functions[i] not in test_funcs:
+    #             print functions[i]
     labels = labels.transpose()
     batch_size = 512
     all_functions = get_go_set(go, GO_ID)
     logging.info('Loading model')
-    with open(DATA_ROOT + 'model_' + FUNCTION + '.json', 'r') as f:
+    with open(DATA_ROOT + 'model_' + FUNCTION + ORG + '.json', 'r') as f:
         json_string = next(f)
     model = model_from_json(json_string)
     model.compile(

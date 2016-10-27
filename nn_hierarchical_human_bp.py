@@ -37,7 +37,7 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/human/'
+DATA_ROOT = 'data/network/'
 MAXLEN = 1000
 GO_ID = BIOLOGICAL_PROCESS
 go = get_gene_ontology('go.obo')
@@ -176,7 +176,7 @@ def model():
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_bp.json', 'w') as f:
+    with open(DATA_ROOT + 'model_bp_w' + ORG + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     model.compile(
@@ -184,7 +184,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_bp' + ORG + '.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_bp_w' + ORG + '.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
@@ -237,7 +237,7 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-bp' + ORG + '.txt', 'w') as f:
+    with open(DATA_ROOT + 'predictions-bp_w' + ORG + '.txt', 'w') as f:
         for prot in prot_res:
             pred = prot['pred']
             test = prot['test']

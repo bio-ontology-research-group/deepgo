@@ -45,14 +45,14 @@ def load_all_proteins():
 
 def get_org_prots():
     result = set()
-    with open('data/uniprot-all-org.tab', 'r') as f:
-        next(f)  # skipping header line
+    with open('data/uniprot-viruses.tab', 'r') as f:
+        # next(f)  # skipping header line
         for line in f:
             items = line.strip().split()
             prot_id = items[0]
-            org_id = items[1]
-            if org_id == ORG_ID:
-                result.add(prot_id)
+            # org_id = items[1]
+            # if org_id == ORG_ID:
+            result.add(prot_id)
     return result
 
 
@@ -67,7 +67,7 @@ def main():
         prot_id, seq, gos = item
         if prot_id in org_prots:
             test_prots.append(item)
-    with open(RESULT_ROOT + 'proteins-mold.txt', 'w') as f:
+    with open(RESULT_ROOT + 'proteins-virus.txt', 'w') as f:
         for prot_id, seq, gos in test_prots:
             f.write(prot_id + '\t' + seq + '\t' + gos + '\n')
 

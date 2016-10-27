@@ -41,7 +41,7 @@ DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 GO_ID = CELLULAR_COMPONENT
 go = get_gene_ontology('go.obo')
-ORG = ''
+ORG = '-pombe'
 
 
 func_df = pd.read_pickle(DATA_ROOT + 'cc' + ORG + '.pkl')
