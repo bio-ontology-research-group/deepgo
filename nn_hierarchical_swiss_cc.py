@@ -37,11 +37,11 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/cafa2/'
 MAXLEN = 1000
 GO_ID = CELLULAR_COMPONENT
 go = get_gene_ontology('go.obo')
-ORG = '-pombe'
+ORG = ''
 
 
 func_df = pd.read_pickle(DATA_ROOT + 'cc' + ORG + '.pkl')
@@ -238,30 +238,19 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-cc' + ORG + '.txt', 'w') as f:
-        for prot in prot_res:
-            pred = prot['pred']
-            test = prot['test']
-            f.write(str(pred[0]))
-            for v in pred[1:]:
-                f.write('\t' + str(v))
-            f.write('\n')
-
-            f.write(str(test[0]))
-            for v in test[1:]:
-                f.write('\t' + str(v))
-            f.write('\n')
-
-            tp = prot['tp']
-            fp = prot['fp']
-            fn = prot['fn']
-            if tp == 0.0 and fp == 0.0 and fn == 0.0:
-                continue
-            if tp != 0.0:
-                recall = tp / (1.0 * (tp + fn))
-                precision = tp / (1.0 * (tp + fp))
-                fs += 2 * precision * recall / (precision + recall)
-            n += 1
+    for prot in prot_res:
+        pred = prot['pred']
+        test = prot['test']
+        tp = prot['tp']
+        fp = prot['fp']
+        fn = prot['fn']
+        if tp == 0.0 and fp == 0.0 and fn == 0.0:
+            continue
+        if tp != 0.0:
+            recall = tp / (1.0 * (tp + fn))
+            precision = tp / (1.0 * (tp + fp))
+            fs += 2 * precision * recall / (precision + recall)
+        n += 1
     logging.info('Protein centric F measure: \t %f %d' % (fs / n, n))
     logging.info('Test loss:\t %f' % score[0])
     logging.info('Test accuracy:\t %f' % score[1])

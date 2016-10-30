@@ -58,3 +58,8 @@ zebrafish - 7955
 1257 & 1419 & 705
 viruses
 1098 & 518 & 138
+
+
+# Experiments with embeddings
+80/20 with - 0.785514 34121, 0.855387 35816, 0.798833 31559
+80/20 without - 0.745071 34121

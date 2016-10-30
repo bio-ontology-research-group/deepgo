@@ -39,11 +39,11 @@ sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/network/'
 MAXLEN = 1000
-GO_ID = BIOLOGICAL_PROCESS
+GO_ID = CELLULAR_COMPONENT
 go = get_gene_ontology('go.obo')
 ORG = ''
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 logging.info(len(functions))
@@ -53,8 +53,8 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train' + ORG + '-bp.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test' + ORG + '-bp.pkl')
+    train_df = pd.read_pickle(DATA_ROOT + 'train' + ORG + '-cc.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test' + ORG + '-cc.pkl')
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -65,6 +65,18 @@ def load_data(validation_split=0.8):
     train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
     val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
     test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
+    rep_train_data = train_df[:train_n]['rep'].values
+    shape = rep_train_data.shape
+    rep_train_data = np.hstack(rep_train_data).reshape(shape[0], 64)
+    rep_val_data = train_df[train_n:]['rep'].values
+    shape = rep_val_data.shape
+    rep_val_data = np.hstack(rep_val_data).reshape(shape[0], 64)
+    rep_test_data = test_df['rep'].values
+    shape = rep_test_data.shape
+    rep_test_data = np.hstack(rep_test_data).reshape(shape[0], 64)
+    train_data = (train_data, rep_train_data)
+    val_data = (val_data, rep_val_data)
+    test_data = (test_data, rep_test_data)
     shape = train_labels.shape
     train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
     train_labels = train_labels.transpose()
@@ -142,9 +154,11 @@ def model():
     test_labels, test_data = test
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Building the model")
-    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input')
+    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
+    inputs2 = Input(shape=(64,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
-    go[GO_ID]['model'] = BatchNormalization()(feature_model)
+    merged = merge([feature_model, inputs2], mode='concat', name='merged')
+    go[GO_ID]['model'] = BatchNormalization()(merged)
     q = deque()
     used = set()
     for go_id in go[GO_ID]['children']:
@@ -172,11 +186,11 @@ def model():
     for i in range(len(functions)):
         output_models[i] = go[functions[i]]['output']
 
-    model = Model(input=inputs, output=output_models)
+    model = Model(input=[inputs, inputs2], output=output_models)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_bp_w' + ORG + '.json', 'w') as f:
+    with open(DATA_ROOT + 'model_network_cc' + ORG + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     model.compile(
@@ -184,7 +198,7 @@ def model():
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_bp_w' + ORG + '.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_network_cc' + ORG + '.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
@@ -199,10 +213,10 @@ def model():
 
     model.fit_generator(
         train_generator,
-        samples_per_epoch=len(train_data),
+        samples_per_epoch=len(train_data[0]),
         nb_epoch=nb_epoch,
         validation_data=val_generator,
-        nb_val_samples=len(val_data),
+        nb_val_samples=len(val_data[0]),
         max_q_size=batch_size,
         callbacks=[checkpointer, earlystopper])
 
@@ -211,12 +225,12 @@ def model():
     output_test = []
     for i in range(len(functions)):
         output_test.append(np.array(test_labels[i]))
-    score = model.evaluate(test_data, output_test, batch_size=batch_size)
+    score = model.evaluate([test_data[0], test_data[1]], output_test, batch_size=batch_size)
     predictions = model.predict(
-        test_data, batch_size=batch_size, verbose=1)
+        [test_data[0], test_data[1]], batch_size=batch_size, verbose=1)
 
     prot_res = list()
-    for i in range(len(test_data)):
+    for i in range(len(test_data[0])):
         prot_res.append({
             'tp': 0.0, 'fp': 0.0, 'fn': 0.0,
             'pred': list(), 'test': list()})
@@ -237,30 +251,19 @@ def model():
         logging.info(classification_report(test, pred))
     fs = 0.0
     n = 0
-    with open(DATA_ROOT + 'predictions-bp' + ORG + '.txt', 'w') as f:
-        for prot in prot_res:
-            pred = prot['pred']
-            test = prot['test']
-            f.write(str(pred[0]))
-            for v in pred[1:]:
-                f.write('\t' + str(v))
-            f.write('\n')
-
-            f.write(str(test[0]))
-            for v in test[1:]:
-                f.write('\t' + str(v))
-            f.write('\n')
-
-            tp = prot['tp']
-            fp = prot['fp']
-            fn = prot['fn']
-            if tp == 0.0 and fp == 0.0 and fn == 0.0:
-                continue
-            if tp != 0.0:
-                recall = tp / (1.0 * (tp + fn))
-                precision = tp / (1.0 * (tp + fp))
-                fs += 2 * precision * recall / (precision + recall)
-            n += 1
+    for prot in prot_res:
+        pred = prot['pred']
+        test = prot['test']
+        tp = prot['tp']
+        fp = prot['fp']
+        fn = prot['fn']
+        if tp == 0.0 and fp == 0.0 and fn == 0.0:
+            continue
+        if tp != 0.0:
+            recall = tp / (1.0 * (tp + fn))
+            precision = tp / (1.0 * (tp + fp))
+            fs += 2 * precision * recall / (precision + recall)
+        n += 1
     logging.info('Protein centric F measure: \t %f %d' % (fs / n, n))
     logging.info('Test loss:\t %f' % score[0])
     logging.info('Test accuracy:\t %f' % score[1])
@@ -275,6 +278,7 @@ def print_report(report, go_id):
 
 def main(*args, **kwargs):
     model()
+
 
 if __name__ == '__main__':
     main(*sys.argv)

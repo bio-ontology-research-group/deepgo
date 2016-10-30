@@ -29,10 +29,10 @@ FUNC_DICT = {
 
 GO_ID = FUNC_DICT[FUNCTION]
 
-DATA_ROOT = 'data/network/'
+DATA_ROOT = 'data/cafa2/'
 FILENAME = TT + '.txt'
 
-go = get_gene_ontology('go.obo')
+go = get_gene_ontology('go_cafa2.obo')
 
 func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
 functions = func_df['functions'].values
@@ -123,11 +123,11 @@ def main(*args, **kwargs):
         'indexes': indexes,
         'gos': gos,
         'labels': labels}
-    rep = load_rep()
-    rep_list = list()
-    for prot_id in proteins:
-        rep_list.append(rep[prot_id])
-    data['rep'] = rep_list
+    # rep = load_rep()
+    # rep_list = list()
+    # for prot_id in proteins:
+    #     rep_list.append(rep[prot_id])
+    # data['rep'] = rep_list
     df = pd.DataFrame(data)
     df.to_pickle(DATA_ROOT + TT + ORG + '-' + FUNCTION + '.pkl')
 
