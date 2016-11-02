@@ -43,7 +43,7 @@ GO_ID = BIOLOGICAL_PROCESS
 go = get_gene_ontology('go.obo')
 ORG = ''
 
-func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'bp' + ORG + '.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 logging.info(len(functions))

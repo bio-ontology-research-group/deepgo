@@ -36,8 +36,8 @@ def read_fasta(filename):
 
 
 def get_annotations():
-    w = open('data/cafa2/annotations.tab', 'w')
-    with open('data/uniprot_sprot.dat', 'r') as f:
+    w = open('data/cafa2/annotations_2014.tab', 'w')
+    with open('data/uniprot_sprot_2014.dat', 'r') as f:
         prot = ''
         annots = list()
         for line in f:
@@ -99,14 +99,14 @@ def get_data():
                 seqs[prot_id] = items[1]
 
     data = list()
-    with open('data/cafa2/annotations-2013.tab', 'r') as f:
+    with open('data/cafa2/annotations_2014.tab', 'r') as f:
         for line in f:
             items = line.strip().split('\t')
-            if items[0] not in targets and items[0] in seqs:
+            if items[0] in targets and items[0] in seqs:
                 data.append(items)
 
     np.random.shuffle(data)
-    fl = open('data/cafa2/train.txt', 'w')
+    fl = open('data/cafa2/test.txt', 'w')
     for items in data:
         fl.write(items[0] + '\t' + seqs[items[0]] + '\t' + items[1])
         for i in range(2, len(items)):
@@ -117,7 +117,6 @@ def get_data():
 
 def main(*args, **kwargs):
     get_data()
-
 
 if __name__ == '__main__':
     main(*sys.argv)

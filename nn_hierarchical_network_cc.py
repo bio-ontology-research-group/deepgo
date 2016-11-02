@@ -43,7 +43,7 @@ GO_ID = CELLULAR_COMPONENT
 go = get_gene_ontology('go.obo')
 ORG = ''
 
-func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
+func_df = pd.read_pickle(DATA_ROOT + 'cc' + ORG + '.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
 logging.info(len(functions))
