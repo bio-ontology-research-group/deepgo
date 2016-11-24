@@ -27,7 +27,7 @@ def read_fasta(filename):
             if line.startswith('>'):
                 if seq != '':
                     data.append(seq)
-                line = line.split()[0]
+                line = line.split()[1]
                 seq = line + '\t'
             else:
                 seq += line
@@ -64,15 +64,15 @@ def get_annotations():
 
 
 def fasta2tabs():
-    cafa_root = 'data/cafa2/data/CAFA2-targets/'
+    cafa_root = 'data/cafa3/CAFA3_targets/'
     data = list()
-    for dr in os.listdir(cafa_root):
-        if os.path.isdir(cafa_root + dr):
-            for fl in os.listdir(cafa_root + dr):
-                if fl.endswith('.tfa'):
-                    seqs = read_fasta(cafa_root + dr + '/' + fl)
-                    data += seqs
-    with open('data/cafa2/targets.txt', 'w') as f:
+    # for dr in os.listdir(cafa_root):
+    # if os.path.isdir(cafa_root + 'Targets/'):
+    for fl in os.listdir(cafa_root + 'Targets/'):
+        if fl.endswith('.fasta'):
+            seqs = read_fasta(cafa_root + 'Targets/' + fl)
+            data += seqs
+    with open('data/cafa3/targets.txt', 'w') as f:
         for line in data:
             f.write(line + '\n')
 
@@ -84,39 +84,66 @@ def sprot2tabs():
             f.write(line + '\n')
 
 
-def get_data():
-    targets = set()
-    with open('data/cafa2/targets.txt', 'r') as f:
+def cafa3():
+    root = 'data/cafa3/CAFA3_training_data/'
+    filename = root + 'uniprot_sprot_exp.fasta'
+    data = read_fasta(filename)
+    annots = dict()
+    with open(root + 'uniprot_sprot_exp.txt') as f:
         for line in f:
-            items = line.strip().split()
-            targets.add(items[1])
+            items = line.strip().split('\t')
+            if items[0] not in annots:
+                annots[items[0]] = set()
+            annots[items[0]].add(items[1])
+    fl = open(root + 'uniprot_sprot.tab', 'w')
+    for line in data:
+        items = line.split('\t')
+        if is_ok(items[1]) and items[0] in annots:
+            fl.write(line + '\t')
+            gos = list(annots[items[0]])
+            fl.write(gos[0])
+            for go_id in gos[1:]:
+                fl.write('; ' + go_id)
+            fl.write('\n')
+
+
+def get_data():
+    # targets = set()
+    # with open('data/cafa2/targets.txt', 'r') as f:
+    #     for line in f:
+    #         items = line.strip().split()
+    #         targets.add(items[1])
     seqs = dict()
-    with open('data/cafa2/uniprot_sprot.tab', 'r') as f:
+    with open('data/cafa3/targets.txt', 'r') as f:
         for line in f:
             items = line.strip().split('\t')
             if is_ok(items[1]):
-                prot_id = items[0].split('|')[2]
+                prot_id = items[0]
                 seqs[prot_id] = items[1]
-
-    data = list()
-    with open('data/cafa2/annotations_2014.tab', 'r') as f:
+    # print len(seqs)
+    annots = dict()
+    with open('data/cafa3/uniprot-go.tab', 'r') as f:
         for line in f:
             items = line.strip().split('\t')
-            if items[0] in targets and items[0] in seqs:
-                data.append(items)
+            if items[1] in seqs:
+                annots[items[1]] = items[2]
 
-    np.random.shuffle(data)
-    fl = open('data/cafa2/test.txt', 'w')
-    for items in data:
-        fl.write(items[0] + '\t' + seqs[items[0]] + '\t' + items[1])
-        for i in range(2, len(items)):
-            fl.write('; ' + items[i])
-        fl.write('\n')
+    # np.random.shuffle(data)
+    fl = open('data/cafa3/data.txt', 'w')
+    for prot_id in seqs:
+        if prot_id in annots:
+            fl.write(prot_id + '\t' + seqs[prot_id] + '\t' + annots[prot_id])
+            fl.write('\n')
+        else:
+            print(prot_id)
     fl.close()
 
 
 def main(*args, **kwargs):
     get_data()
+    # cafa3()
+    # fasta2tabs()
+
 
 if __name__ == '__main__':
     main(*sys.argv)

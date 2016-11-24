@@ -63,3 +63,7 @@ viruses
 # Experiments with embeddings
 80/20 with - 0.785514 34121, 0.855387 35816, 0.798833 31559
 80/20 without - 0.745071 34121
+
+
+# CAFA 2 Challange experiments
+0.380500 66123, 0.498349 66311, 0.560893 71437

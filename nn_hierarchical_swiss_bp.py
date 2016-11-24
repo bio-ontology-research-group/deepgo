@@ -37,7 +37,7 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/cafa2/'
+DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 GO_ID = BIOLOGICAL_PROCESS
 go = get_gene_ontology('go.obo')

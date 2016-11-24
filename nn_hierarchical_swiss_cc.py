@@ -37,7 +37,7 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/network/'
+DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 GO_ID = CELLULAR_COMPONENT
 go = get_gene_ontology('go.obo')
@@ -133,7 +133,7 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
-    output_dim = 128
+    output_dim = 256
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
@@ -188,7 +188,7 @@ def model():
     model_path = DATA_ROOT + 'hierarchical_cc' + ORG + '.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
-    earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
+    earlystopper = EarlyStopping(monitor='val_loss', patience=20, verbose=1)
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))
     logging.info('Starting training the model')

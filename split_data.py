@@ -7,9 +7,9 @@ from utils import shuffle, get_gene_ontology
 from aaindex import INVALID_ACIDS
 
 
-DATA_ROOT = 'data/swiss/'
-RESULT_ROOT = 'data/swiss/'
-FILE_NAME = 'uniprot_swiss.tab'
+DATA_ROOT = 'data/cafa3/'
+RESULT_ROOT = 'data/cafa3/'
+FILE_NAME = 'data.txt'
 
 
 MINLEN = 25
@@ -28,10 +28,10 @@ def is_ok(seq):
 def load_all_proteins():
     prots = list()
     rep_prots = set()
-    with open(DATA_ROOT + 'prots.txt', 'r') as f:
-        for line in f:
-            it = line.strip().split('\t')
-            rep_prots.add(it[0])
+    # with open(DATA_ROOT + 'prots.txt', 'r') as f:
+    #     for line in f:
+    #         it = line.strip().split('\t')
+    #         rep_prots.add(it[0])
 
     with open(DATA_ROOT + FILE_NAME, 'r') as f:
         for line in f:
@@ -39,8 +39,8 @@ def load_all_proteins():
             prot_id = line[0]
             seq = line[1]
             gos = line[2]
-            if prot_id in rep_prots and is_ok(seq):
-                prots.append((prot_id, seq, gos))
+            # if prot_id in rep_prots and is_ok(seq):
+            prots.append((prot_id, seq, gos))
     return prots
 
 

@@ -9,19 +9,21 @@ from utils import (
     get_anchestors,
     BIOLOGICAL_PROCESS,
     MOLECULAR_FUNCTION,
-    CELLULAR_COMPONENT)
-from aaindex import AAINDEX
+    CELLULAR_COMPONENT,
+    FUNC_DICT)
 from multiprocessing import Pool
 
 
-DATA_ROOT = 'data/cafa2/'
+DATA_ROOT = 'data/cafa3/'
 ORG = ''
 FILENAME = 'train' + ORG + '.txt'
-ANNOT_NUM = 10
-GO_ID = CELLULAR_COMPONENT
-FUNCTION = 'cc' + ORG
+ANNOT_NUM = 250
+FUNCTION = 'bp'
 
-go = get_gene_ontology('go_cafa2.obo')
+GO_ID = FUNC_DICT[FUNCTION]
+FUNCTION += ORG
+
+go = get_gene_ontology('go.obo')
 # functions = get_go_sets(
 #     go, [MOLECULAR_FUNCTION, BIOLOGICAL_PROCESS, CELLULAR_COMPONENT])
 
