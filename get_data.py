@@ -82,7 +82,7 @@ def load_data():
 
 def load_rep():
     data = dict()
-    with open(DATA_ROOT + 'uni_reps.tab', 'r') as f:
+    with open('data/uni_reps.tab', 'r') as f:
         for line in f:
             it = line.strip().split('\t')
             prot_id = it[0]
@@ -93,32 +93,32 @@ def load_rep():
 
 def filter_data():
     prots = set()
-    with open('data/network/uni_reps.tab', 'r') as f:
+    with open('data/uni_reps.tab', 'r') as f:
         for line in f:
             items = line.strip().split('\t')
             prots.add(items[0])
     train = list()
-    with open('data/network/train.txt', 'r') as f:
+    with open('data/cafa3/uniprot_sprot.tab', 'r') as f:
         for line in f:
             items = line.strip().split('\t')
             if items[0] in prots:
                 train.append(line)
-    with open('data/network/train.txt', 'w') as f:
+    with open('data/cafa3/data.txt', 'w') as f:
         for line in train:
             f.write(line)
 
-    test = list()
-    with open('data/network/test.txt', 'r') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            if items[0] in prots:
-                test.append(line)
-    with open('data/network/test.txt', 'w') as f:
-        for line in test:
-            f.write(line)
+    # test = list()
+    # with open('data/network/test.txt', 'r') as f:
+    #     for line in f:
+    #         items = line.strip().split('\t')
+    #         if items[0] in prots:
+    #             test.append(line)
+    # with open('data/network/test.txt', 'w') as f:
+    #     for line in test:
+    #         f.write(line)
 
 
-def main(*args, **kwargs):
+def run(*args, **kwargs):
     proteins, sequences, indexes, gos, labels = load_data()
     data = {
         'proteins': proteins,
@@ -126,14 +126,17 @@ def main(*args, **kwargs):
         'indexes': indexes,
         'gos': gos,
         'labels': labels}
-    # rep = load_rep()
-    # rep_list = list()
-    # for prot_id in proteins:
-    #     rep_list.append(rep[prot_id])
-    # data['rep'] = rep_list
+    rep = load_rep()
+    rep_list = list()
+    for prot_id in proteins:
+        rep_list.append(rep[prot_id])
+    data['rep'] = rep_list
     df = pd.DataFrame(data)
     df.to_pickle(DATA_ROOT + TT + ORG + '-' + FUNCTION + '.pkl')
 
+
+def main(*args):
+    run()
 
 
 if __name__ == '__main__':

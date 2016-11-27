@@ -37,7 +37,7 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/network/'
+DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 GO_ID = MOLECULAR_FUNCTION
 go = get_gene_ontology('go.obo')
@@ -66,14 +66,15 @@ def load_data(validation_split=0.8):
     val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
     test_data = sequence.pad_sequences(test_data, maxlen=MAXLEN)
     rep_train_data = train_df[:train_n]['rep'].values
+    rep_length = len(rep_train_data[0])
     shape = rep_train_data.shape
-    rep_train_data = np.hstack(rep_train_data).reshape(shape[0], 64)
+    rep_train_data = np.hstack(rep_train_data).reshape(shape[0], rep_length)
     rep_val_data = train_df[train_n:]['rep'].values
     shape = rep_val_data.shape
-    rep_val_data = np.hstack(rep_val_data).reshape(shape[0], 64)
+    rep_val_data = np.hstack(rep_val_data).reshape(shape[0], rep_length)
     rep_test_data = test_df['rep'].values
     shape = rep_test_data.shape
-    rep_test_data = np.hstack(rep_test_data).reshape(shape[0], 64)
+    rep_test_data = np.hstack(rep_test_data).reshape(shape[0], rep_length)
     train_data = (train_data, rep_train_data)
     val_data = (val_data, rep_val_data)
     test_data = (test_data, rep_test_data)
@@ -155,7 +156,7 @@ def model():
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    inputs2 = Input(shape=(64,), dtype='float32', name='input2')
+    inputs2 = Input(shape=(256,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
     merged = merge([feature_model, inputs2], mode='concat', name='merged')
     go[GO_ID]['model'] = BatchNormalization()(merged)

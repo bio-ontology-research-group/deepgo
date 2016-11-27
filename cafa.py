@@ -5,12 +5,11 @@ import numpy as np
 import pandas as pd
 from aaindex import INVALID_ACIDS
 
-MINLEN = 25
 MAXLEN = 1000
 
 
 def is_ok(seq):
-    if len(seq) < MINLEN or len(seq) > MAXLEN:
+    if len(seq) > MAXLEN:
         return False
     for c in seq:
         if c in INVALID_ACIDS:
@@ -27,7 +26,7 @@ def read_fasta(filename):
             if line.startswith('>'):
                 if seq != '':
                     data.append(seq)
-                line = line.split()[1]
+                line = line[1:]
                 seq = line + '\t'
             else:
                 seq += line
@@ -139,10 +138,26 @@ def get_data():
     fl.close()
 
 
+def cafa2string():
+    rep_prots = set()
+    with open('data/uni_mapping.tab') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            rep_prots.add(items[0])
+    c = 0
+    with open('data/cafa3/targets.txt') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            if items[0] in rep_prots:
+                c += 1
+    print(c)
+
+
 def main(*args, **kwargs):
-    get_data()
+    # get_data()
     # cafa3()
     # fasta2tabs()
+    cafa2string()
 
 
 if __name__ == '__main__':
