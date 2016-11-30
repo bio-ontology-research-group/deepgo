@@ -43,6 +43,8 @@ DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 REPLEN = 256
 FUNCTION = 'mf'
+if len(sys.argv) > 1:
+    FUNCTION = sys.argv[1]
 
 GO_ID = FUNC_DICT[FUNCTION]
 go = get_gene_ontology('go.obo')
