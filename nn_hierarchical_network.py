@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-OMP_NUM_THREADS=64 THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python nn_hierarchical_swiss_bp.py
+OMP_NUM_THREADS=64 THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python nn_hierarchical_network.py
 """
 
 import numpy as np
@@ -13,6 +13,7 @@ from keras.layers import (
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
     Convolution1D, MaxPooling1D)
+from keras.optimizers import Adam
 from sklearn.metrics import classification_report
 from utils import (
     shuffle,
@@ -24,7 +25,8 @@ from utils import (
     MOLECULAR_FUNCTION,
     CELLULAR_COMPONENT,
     DataGenerator,
-    get_node_name)
+    get_node_name,
+    FUNC_DICT)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
 import sys
@@ -39,22 +41,36 @@ sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
-GO_ID = CELLULAR_COMPONENT
+REPLEN = 256
+FUNCTION = 'mf'
+
+GO_ID = FUNC_DICT[FUNCTION]
 go = get_gene_ontology('go.obo')
 ORG = ''
 
-func_df = pd.read_pickle(DATA_ROOT + 'cc' + ORG + '.pkl')
+func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
 functions = func_df['functions'].values
 func_set = set(functions)
+all_functions = get_go_set(go, GO_ID)
 logging.info(len(functions))
 go_indexes = dict()
 for ind, go_id in enumerate(functions):
     go_indexes[go_id] = ind
 
 
-def load_data(validation_split=0.8):
-    train_df = pd.read_pickle(DATA_ROOT + 'train' + ORG + '-cc.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + 'test' + ORG + '-cc.pkl')
+def load_data(split=0.7):
+    df = pd.read_pickle(DATA_ROOT + 'data' + ORG + '-' + FUNCTION + '.pkl')
+    n = len(df)
+    index = np.arange(n)
+    train_n = int(n * split)
+    np.random.seed(seed=5)
+    np.random.shuffle(index)
+    train_df = df.loc[df.index[index[:train_n]]]
+    test_df = df.loc[df.index[index[train_n:]]]
+    return reformat_data(train_df, test_df)
+
+
+def reformat_data(train_df, test_df, validation_split=0.8):
     train_n = int(validation_split * len(train_df['indexes']))
     train_data = train_df[:train_n]['indexes'].values
     train_labels = train_df[:train_n]['labels'].values
@@ -77,7 +93,7 @@ def load_data(validation_split=0.8):
     rep_test_data = np.hstack(rep_test_data).reshape(shape[0], rep_length)
     train_data = (train_data, rep_train_data)
     val_data = (val_data, rep_val_data)
-    test_data = (test_data, rep_test_data)
+    test_data = (test_data, rep_test_data, test_df['gos'].values)
     shape = train_labels.shape
     train_labels = np.hstack(train_labels).reshape(shape[0], len(functions))
     train_labels = train_labels.transpose()
@@ -110,12 +126,12 @@ def get_feature_model():
         input_length=MAXLEN,
         dropout=0.2))
     model.add(Convolution1D(
-        nb_filter=20,
-        filter_length=10,
+        nb_filter=32,
+        filter_length=20,
         border_mode='valid',
         activation='relu',
         subsample_length=1))
-    model.add(MaxPooling1D(pool_length=5, stride=5))
+    model.add(MaxPooling1D(pool_length=10, stride=5))
     model.add(Flatten())
     return model
 
@@ -145,7 +161,7 @@ def model():
     # set parameters:
     batch_size = 512
     nb_epoch = 100
-    output_dim = 128
+    output_dim = 256
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
@@ -156,7 +172,7 @@ def model():
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    inputs2 = Input(shape=(256,), dtype='float32', name='input2')
+    inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
     merged = merge([feature_model, inputs2], mode='concat', name='merged')
     go[GO_ID]['model'] = BatchNormalization()(merged)
@@ -191,15 +207,16 @@ def model():
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_network_cc' + ORG + '.json', 'w') as f:
+    with open(DATA_ROOT + 'model_network_' + FUNCTION + ORG + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
+    optimizer = Adam(lr=3e-4, beta_1=0.95, beta_2=0.9995)
     model.compile(
-        optimizer='rmsprop',
+        optimizer=optimizer,
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
-    model_path = DATA_ROOT + 'hierarchical_network_cc' + ORG + '.hdf5'
+    model_path = DATA_ROOT + 'hierarchical_network_' + FUNCTION + ORG + '.hdf5'
     checkpointer = ModelCheckpoint(
         filepath=model_path, verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
@@ -234,7 +251,7 @@ def model():
     for i in range(len(test_data[0])):
         prot_res.append({
             'tp': 0.0, 'fp': 0.0, 'fn': 0.0,
-            'pred': list(), 'test': list()})
+            'pred': list(), 'test': list(), 'gos': test_data[2][i]})
     for i in range(len(test_labels)):
         rpred = predictions[i].flatten()
         pred = np.round(rpred)
@@ -258,6 +275,9 @@ def model():
         tp = prot['tp']
         fp = prot['fp']
         fn = prot['fn']
+        for go_id in prot['gos']:
+            if go_id not in func_set and go_id in all_functions:
+                fn += 1
         if tp == 0.0 and fp == 0.0 and fn == 0.0:
             continue
         if tp != 0.0:
@@ -279,7 +299,6 @@ def print_report(report, go_id):
 
 def main(*args, **kwargs):
     model()
-
 
 if __name__ == '__main__':
     main(*sys.argv)

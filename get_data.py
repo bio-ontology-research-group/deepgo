@@ -10,10 +10,12 @@ from utils import (
     MOLECULAR_FUNCTION,
     CELLULAR_COMPONENT)
 from aaindex import AAINDEX
+from text import get_text_reps
+
 
 FUNCTION = 'bp'
 ORG = ''
-TT = 'train'
+TT = 'data'
 
 args = sys.argv
 if len(args) == 4:
@@ -98,24 +100,16 @@ def filter_data():
             items = line.strip().split('\t')
             prots.add(items[0])
     train = list()
+    text_reps = get_text_reps()
     with open('data/cafa3/uniprot_sprot.tab', 'r') as f:
         for line in f:
             items = line.strip().split('\t')
-            if items[0] in prots:
+            if items[0] not in prots:
                 train.append(line)
+    print(len(train))
     with open('data/cafa3/data.txt', 'w') as f:
         for line in train:
             f.write(line)
-
-    # test = list()
-    # with open('data/network/test.txt', 'r') as f:
-    #     for line in f:
-    #         items = line.strip().split('\t')
-    #         if items[0] in prots:
-    #             test.append(line)
-    # with open('data/network/test.txt', 'w') as f:
-    #     for line in test:
-    #         f.write(line)
 
 
 def run(*args, **kwargs):
@@ -127,9 +121,16 @@ def run(*args, **kwargs):
         'gos': gos,
         'labels': labels}
     rep = load_rep()
+    # text_reps = get_text_reps()
     rep_list = list()
     for prot_id in proteins:
-        rep_list.append(rep[prot_id])
+        # text_rep = np.zeros((128,), dtype='float32')
+        net_rep = np.zeros((256,), dtype='float32')
+        # if prot_id in text_reps:
+        #     text_rep = text_reps[prot_id]
+        if prot_id in rep:
+            net_rep = rep[prot_id]
+        rep_list.append(net_rep)
     data['rep'] = rep_list
     df = pd.DataFrame(data)
     df.to_pickle(DATA_ROOT + TT + ORG + '-' + FUNCTION + '.pkl')
@@ -137,6 +138,7 @@ def run(*args, **kwargs):
 
 def main(*args):
     run()
+    # filter_data()
 
 
 if __name__ == '__main__':

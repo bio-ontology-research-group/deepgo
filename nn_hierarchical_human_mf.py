@@ -13,6 +13,7 @@ from keras.layers import (
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
     Convolution1D, MaxPooling1D)
+from keras.optimizers import Adam
 from sklearn.metrics import classification_report
 from utils import (
     shuffle,
@@ -180,8 +181,9 @@ def model():
     with open(DATA_ROOT + 'model_mf.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
+    optimizer = Adam(lr=3e-4, beta_1=0.95, beta_2=0.9995)
     model.compile(
-        optimizer='rmsprop',
+        optimizer=optimizer,
         loss='binary_crossentropy',
         metrics=['accuracy'])
 
