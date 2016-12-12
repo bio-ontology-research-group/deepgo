@@ -121,16 +121,21 @@ def run(*args, **kwargs):
         'gos': gos,
         'labels': labels}
     rep = load_rep()
-    # text_reps = get_text_reps()
+    text_reps = get_text_reps()
     rep_list = list()
+    rep_n = 0
+    text_n = 0
     for prot_id in proteins:
-        # text_rep = np.zeros((128,), dtype='float32')
+        text_rep = np.zeros((128,), dtype='float32')
         net_rep = np.zeros((256,), dtype='float32')
-        # if prot_id in text_reps:
-        #     text_rep = text_reps[prot_id]
+        if prot_id in text_reps:
+            text_rep = text_reps[prot_id]
+            text_n += 1
         if prot_id in rep:
             net_rep = rep[prot_id]
-        rep_list.append(net_rep)
+            rep_n += 1
+        rep_list.append(np.concatenate((net_rep, text_rep)))
+    print(len(rep_list), rep_n, text_n)
     data['rep'] = rep_list
     df = pd.DataFrame(data)
     df.to_pickle(DATA_ROOT + TT + ORG + '-' + FUNCTION + '.pkl')

@@ -13,7 +13,7 @@ from keras.layers import (
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
     Convolution1D, MaxPooling1D)
-from keras.optimizers import Adam
+from keras.optimizers import Adam, RMSprop, Adadelta
 from sklearn.metrics import classification_report
 from utils import (
     shuffle,
@@ -29,6 +29,7 @@ from utils import (
     FUNC_DICT)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
+from keras import backend as K
 import sys
 from aaindex import (
     AAINDEX)
@@ -41,7 +42,7 @@ sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
-REPLEN = 256
+REPLEN = 384
 FUNCTION = 'mf'
 if len(sys.argv) > 1:
     FUNCTION = sys.argv[1]
@@ -158,6 +159,15 @@ def get_function_node(go_id, parent_models, output_dim):
     output = Dense(1, activation='sigmoid', name=output_name)(dense)
     return dense, output
 
+def f_score(labels, preds):
+    preds = K.round(preds)
+    tp = K.sum(labels * preds)
+    fp = K.sum(preds) - tp
+    fn = K.sum(labels) - tp
+    p = tp / (tp + fp)
+    r = tp / (tp + fp)
+    return 2 * p * r / (p + r)
+
 
 def model():
     # set parameters:
@@ -212,11 +222,10 @@ def model():
     with open(DATA_ROOT + 'model_network_' + FUNCTION + ORG + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
-    optimizer = Adam(lr=3e-4, beta_1=0.95, beta_2=0.9995)
+    optimizer = RMSprop()
     model.compile(
         optimizer=optimizer,
-        loss='binary_crossentropy',
-        metrics=['accuracy'])
+        loss='binary_crossentropy')
 
     model_path = DATA_ROOT + 'hierarchical_network_' + FUNCTION + ORG + '.hdf5'
     checkpointer = ModelCheckpoint(
@@ -270,6 +279,8 @@ def model():
         logging.info(functions[i])
         logging.info(classification_report(test, pred))
     fs = 0.0
+    p = 0.0
+    r = 0.0
     n = 0
     for prot in prot_res:
         pred = prot['pred']
@@ -285,11 +296,12 @@ def model():
         if tp != 0.0:
             recall = tp / (1.0 * (tp + fn))
             precision = tp / (1.0 * (tp + fp))
+            p += precision
+            r += recall
             fs += 2 * precision * recall / (precision + recall)
         n += 1
-    logging.info('Protein centric F measure: \t %f %d' % (fs / n, n))
+    logging.info('F measure: \t %f %f %f' % (fs / n, p / n, r / n))
     logging.info('Test loss:\t %f' % score[0])
-    logging.info('Test accuracy:\t %f' % score[1])
     logging.info('Done in %d sec' % (time.time() - start_time))
 
 
