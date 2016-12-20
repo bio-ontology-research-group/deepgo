@@ -212,7 +212,7 @@ def model():
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
-    model = Model(input=inputs, output=output_models)
+    model = Model(input=[inputs, inputs2], output=output_models)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
