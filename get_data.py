@@ -54,6 +54,7 @@ def load_data():
     gos = list()
     labels = list()
     indexes = list()
+    trigrams = list()
     with open(DATA_ROOT + FILENAME, 'r') as f:
         for line in f:
             items = line.strip().split('\t')
@@ -70,16 +71,23 @@ def load_data():
             proteins.append(items[0])
             sequences.append(items[1])
             idx = [0] * len(items[1])
+            tri = [0] * (len(items[1]) - 2)
             for i in range(len(idx)):
-                idx[i] = AAINDEX[items[1][i]]
+                idx[i] = AAINDEX[items[1][i]] + 1
+            for i in xrange(len(tri)):
+                i1 = AAINDEX[items[1][i]]
+                i2 = AAINDEX[items[1][i + 1]]
+                i3 = AAINDEX[items[1][i + 2]]
+                tri[i] = i1 * 400 + i2 * 20 + i3 + 1
             indexes.append(idx)
+            trigrams.append(tri)
             label = [0] * len(functions)
             for go_id in go_set:
                 if go_id in go_indexes:
                     label[go_indexes[go_id]] = 1
             labels.append(label)
 
-    return proteins, sequences, indexes, gos, labels
+    return proteins, sequences, indexes, gos, labels, trigrams
 
 
 def load_rep():
@@ -113,13 +121,14 @@ def filter_data():
 
 
 def run(*args, **kwargs):
-    proteins, sequences, indexes, gos, labels = load_data()
+    proteins, sequences, indexes, gos, labels, trigrams = load_data()
     data = {
         'proteins': proteins,
         'sequences': sequences,
         'indexes': indexes,
         'gos': gos,
-        'labels': labels}
+        'labels': labels,
+        'trigrams': trigrams}
     rep = load_rep()
     text_reps = get_text_reps()
     rep_list = list()

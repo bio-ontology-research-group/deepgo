@@ -13,6 +13,7 @@ from keras.layers import (
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
     Convolution1D, MaxPooling1D)
+from keras.layers.recurrent import LSTM
 from keras.optimizers import Adam, RMSprop, Adadelta
 from sklearn.metrics import classification_report
 from utils import (
@@ -36,6 +37,7 @@ from aaindex import (
 from collections import deque
 import time
 import logging
+import tensorflow as tf
 
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
@@ -127,37 +129,19 @@ def get_feature_model():
         max_features,
         embedding_dims,
         input_length=MAXLEN,
-        dropout=0.2))
-    model.add(Convolution1D(
-        nb_filter=32,
-        filter_length=20,
-        border_mode='valid',
-        activation='relu',
-        subsample_length=1))
-    model.add(MaxPooling1D(pool_length=10, stride=5))
-    model.add(Flatten())
+        dropout=0.2,
+        mask_zero=True))
+    model.add(LSTM(128, activation='relu'))
+    # model.add(Convolution1D(
+    #     nb_filter=32,
+    #     filter_length=20,
+    #     border_mode='valid',
+    #     activation='relu',
+    #     subsample_length=1))
+    # model.add(MaxPooling1D(pool_length=10, stride=5))
+    # model.add(Flatten())
     return model
 
-
-def get_function_node(go_id, parent_models, output_dim):
-    ind = go_indexes[go_id]
-    name = get_node_name(ind * 3)
-    output_name = get_node_name(ind * 3 + 1)
-    merge_name = get_node_name(ind * 3 + 2)
-    if len(parent_models) == 1:
-        dense = Dense(
-            output_dim,
-            activation='relu',
-            name=name)(parent_models[0])
-    else:
-        merged_parent_models = merge(
-            parent_models, mode='concat', name=merge_name)
-        dense = Dense(
-            output_dim,
-            activation='relu',
-            name=name)(merged_parent_models)
-    output = Dense(1, activation='sigmoid', name=output_name)(dense)
-    return dense, output
 
 def f_score(labels, preds):
     preds = K.round(preds)
@@ -165,15 +149,53 @@ def f_score(labels, preds):
     fp = K.sum(preds) - tp
     fn = K.sum(labels) - tp
     p = tp / (tp + fp)
-    r = tp / (tp + fp)
+    r = tp / (tp + fn)
     return 2 * p * r / (p + r)
+
+
+def merge_outputs(outputs, name):
+    if len(outputs) == 1:
+        return outputs[0]
+    return merge(outputs, mode='concat', name=name, concat_axis=1)
+
+
+def get_function_node(go_id, parent_models, output_dim):
+    ind = go_indexes[go_id]
+    name = get_node_name(ind * 3)
+    output_name = get_node_name(ind * 3 + 1)
+    merge_name = get_node_name(ind * 3 + 2)
+    net = merge_outputs(parent_models, merge_name)
+    net = Dense(output_dim, activation='relu', name=name)(net)
+    output = Dense(1, activation='sigmoid', name=output_name)(net)
+    return net, output
+
+
+def get_layers(inputs, node_output_dim=256):
+    q = deque()
+    layers = dict()
+    layers[GO_ID] = {'net': inputs}
+    for node_id in go[GO_ID]['children']:
+        if node_id in func_set:
+            q.append((node_id, node_output_dim))
+    while len(q) > 0:
+        node_id, output_dim = q.popleft()
+        parents = get_parents(go, node_id)
+        parent_models = []
+        for parent_id in parents:
+            if parent_id in layers:
+                parent_models.append(layers[parent_id]['net'])
+        net, output = get_function_node(node_id, parent_models, output_dim)
+        layers[node_id] = {'net': net, 'output': output}
+        for n_id in go[node_id]['children']:
+            if n_id in func_set:
+                q.append((n_id, output_dim))
+    return layers
 
 
 def model():
     # set parameters:
-    batch_size = 512
-    nb_epoch = 100
-    output_dim = 256
+    batch_size = 64
+    nb_epoch = 20
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
@@ -184,42 +206,18 @@ def model():
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
+    # inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
-    merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    go[GO_ID]['model'] = BatchNormalization()(merged)
-    q = deque()
-    used = set()
-    for go_id in go[GO_ID]['children']:
-        if go_id in func_set:
-            q.append((go_id, output_dim))
-            used.add(go_id)
-    min_dim = output_dim
-    while len(q) > 0:
-        go_id, dim = q.popleft()
-        min_dim = min(min_dim, dim)
-        parents = get_parents(go, go_id)
-        parent_models = list()
-        for p_id in parents:
-            if (p_id == GO_ID or p_id in func_set) and 'model' in go[p_id]:
-                parent_models.append(go[p_id]['model'])
-        dense, output = get_function_node(go_id, parent_models, dim)
-        go[go_id]['model'] = dense
-        go[go_id]['output'] = output
-        for ch_id in go[go_id]['children']:
-            if ch_id in func_set and ch_id not in used:
-                q.append((ch_id, dim))
-                used.add(ch_id)
-    logging.info('Min dim %d' % min_dim)
-    output_models = [None] * nb_classes
+    # merged = merge([feature_model, inputs2], mode='concat', name='merged')
+    layers = get_layers(feature_model)
+    output_models = []
     for i in range(len(functions)):
-        output_models[i] = go[functions[i]]['output']
-
-    model = Model(input=[inputs, inputs2], output=output_models)
+        output_models.append(layers[functions[i]]['output'])
+    model = Model(input=inputs, output=output_models)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_network_' + FUNCTION + ORG + '.json', 'w') as f:
+    with open(DATA_ROOT + 'model_' + FUNCTION + ORG + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     optimizer = RMSprop()
@@ -227,36 +225,41 @@ def model():
         optimizer=optimizer,
         loss='binary_crossentropy')
 
-    model_path = DATA_ROOT + 'hierarchical_network_' + FUNCTION + ORG + '.hdf5'
+    model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.h5'
+    last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.last.h5'
+
     checkpointer = ModelCheckpoint(
-        filepath=model_path, verbose=1, save_best_only=True)
-    earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
+        filepath=model_path,
+        verbose=1, save_best_only=True, save_weights_only=True)
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))
     logging.info('Starting training the model')
 
     train_generator = DataGenerator(batch_size, nb_classes)
-    train_generator.fit(train_data, train_labels)
-    val_generator = DataGenerator(batch_size, nb_classes)
-    val_generator.fit(val_data, val_labels)
+    train_generator.fit(train_data[0], train_labels)
+    valid_generator = DataGenerator(batch_size, nb_classes)
+    valid_generator.fit(val_data[0], val_labels)
+    test_generator = DataGenerator(batch_size, nb_classes)
+    test_generator.fit(test_data[0], test_labels)
 
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data[0]),
-        nb_epoch=nb_epoch,
-        validation_data=val_generator,
-        nb_val_samples=len(val_data[0]),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
+    # model.fit_generator(
+    #     train_generator,
+    #     samples_per_epoch=len(train_data[0]),
+    #     nb_epoch=nb_epoch,
+    #     validation_data=valid_generator,
+    #     nb_val_samples=len(val_data[0]),
+    #     max_q_size=batch_size,
+    #     callbacks=[checkpointer])
 
-    logging.info('Loading weights')
-    model.load_weights(model_path)
+    # logging.info('Loading weights')
+    # model.save_weights(last_model_path)
+    model.load_weights(last_model_path)
     output_test = []
     for i in range(len(functions)):
         output_test.append(np.array(test_labels[i]))
-    score = model.evaluate([test_data[0], test_data[1]], output_test, batch_size=batch_size)
-    predictions = model.predict(
-        [test_data[0], test_data[1]], batch_size=batch_size, verbose=1)
+    score = model.evaluate(test_data[0], output_test, batch_size=batch_size)
+    predictions = model.predict_generator(
+        test_generator, val_samples=len(test_data[0]))
 
     prot_res = list()
     for i in range(len(test_data[0])):
@@ -312,7 +315,9 @@ def print_report(report, go_id):
 
 
 def main(*args, **kwargs):
-    model()
+    with tf.device('/gpu:1'):
+        model()
+
 
 if __name__ == '__main__':
     main(*sys.argv)

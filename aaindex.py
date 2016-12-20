@@ -4,5 +4,5 @@ AALETTER = [
 AANUM = len(AALETTER)
 AAINDEX = dict()
 for i in range(len(AALETTER)):
-    AAINDEX[AALETTER[i]] = i + 1
+    AAINDEX[AALETTER[i]] = i
 INVALID_ACIDS = set(['U', 'O', 'B', 'Z', 'J', 'X'])
