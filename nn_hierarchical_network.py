@@ -76,12 +76,12 @@ def load_data(split=0.7):
 
 
 def reformat_data(train_df, test_df, validation_split=0.8):
-    train_n = int(validation_split * len(train_df['indexes']))
-    train_data = train_df[:train_n]['indexes'].values
+    train_n = int(validation_split * len(train_df['trigrams']))
+    train_data = train_df[:train_n]['trigrams'].values
     train_labels = train_df[:train_n]['labels'].values
-    val_data = train_df[train_n:]['indexes'].values
+    val_data = train_df[train_n:]['trigrams'].values
     val_labels = train_df[train_n:]['labels'].values
-    test_data = test_df['indexes'].values
+    test_data = test_df['trigrams'].values
     test_labels = test_df['labels'].values
     train_data = sequence.pad_sequences(train_data, maxlen=MAXLEN)
     val_data = sequence.pad_sequences(val_data, maxlen=MAXLEN)
@@ -122,8 +122,8 @@ def compute_accuracy(predictions, labels):
 
 
 def get_feature_model():
-    embedding_dims = 20
-    max_features = 21
+    embedding_dims = 128
+    max_features = 8001
     model = Sequential()
     model.add(Embedding(
         max_features,
@@ -131,15 +131,15 @@ def get_feature_model():
         input_length=MAXLEN,
         dropout=0.2,
         mask_zero=True))
-    model.add(LSTM(128, activation='relu'))
-    # model.add(Convolution1D(
-    #     nb_filter=32,
-    #     filter_length=20,
-    #     border_mode='valid',
-    #     activation='relu',
-    #     subsample_length=1))
-    # model.add(MaxPooling1D(pool_length=10, stride=5))
-    # model.add(Flatten())
+    # model.add(LSTM(128, activation='relu'))
+    model.add(Convolution1D(
+        nb_filter=32,
+        filter_length=128,
+        border_mode='valid',
+        activation='relu',
+        subsample_length=1))
+    model.add(MaxPooling1D(pool_length=10, stride=5))
+    model.add(Flatten())
     return model
 
 
@@ -242,17 +242,17 @@ def model():
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data[0], test_labels)
 
-    # model.fit_generator(
-    #     train_generator,
-    #     samples_per_epoch=len(train_data[0]),
-    #     nb_epoch=nb_epoch,
-    #     validation_data=valid_generator,
-    #     nb_val_samples=len(val_data[0]),
-    #     max_q_size=batch_size,
-    #     callbacks=[checkpointer])
+    model.fit_generator(
+        train_generator,
+        samples_per_epoch=len(train_data[0]),
+        nb_epoch=nb_epoch,
+        validation_data=valid_generator,
+        nb_val_samples=len(val_data[0]),
+        max_q_size=batch_size,
+        callbacks=[checkpointer])
+    model.save_weights(last_model_path)
 
-    # logging.info('Loading weights')
-    # model.save_weights(last_model_path)
+    logging.info('Loading weights')
     model.load_weights(last_model_path)
     output_test = []
     for i in range(len(functions)):
