@@ -129,8 +129,7 @@ def get_feature_model():
         max_features,
         embedding_dims,
         input_length=MAXLEN,
-        dropout=0.2,
-        mask_zero=True))
+        dropout=0.2))
     # model.add(LSTM(128, activation='relu'))
     model.add(Convolution1D(
         nb_filter=32,
