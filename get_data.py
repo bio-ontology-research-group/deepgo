@@ -71,14 +71,15 @@ def load_data():
             proteins.append(items[0])
             sequences.append(items[1])
             idx = [0] * len(items[1])
-            tri = [0] * (len(items[1]) - 2)
+            tri = [0] * (len(items[1]) - 4)
             for i in range(len(idx)):
                 idx[i] = AAINDEX[items[1][i]] + 1
             for i in xrange(len(tri)):
                 i1 = AAINDEX[items[1][i]]
                 i2 = AAINDEX[items[1][i + 1]]
                 i3 = AAINDEX[items[1][i + 2]]
-                tri[i] = i1 * 400 + i2 * 20 + i3 + 1
+                i4 = AAINDEX[items[1][i + 3]]
+                tri[i] = i1 * 8000 + i2 * 400 + i3 * 20 + i4 + 1
             indexes.append(idx)
             trigrams.append(tri)
             label = [0] * len(functions)
