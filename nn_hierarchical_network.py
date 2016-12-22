@@ -6,6 +6,7 @@ OMP_NUM_THREADS=64 THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python n
 
 import numpy as np
 import pandas as pd
+import click as ck
 from keras.models import Sequential, Model
 from keras.layers import (
     Dense, Dropout, Activation, Input,
@@ -69,6 +70,16 @@ for ind, go_id in enumerate(functions):
     go_indexes[go_id] = ind
 
 
+@ck.command()
+@ck.option(
+    '--device',
+    default='gpu:0',
+    help='GPU or CPU device id')
+def main(device):
+    with tf.device('/' + device):
+        model()
+
+
 def load_data(split=0.7):
     df = pd.read_pickle(DATA_ROOT + 'data' + ORG + '-' + FUNCTION + '.pkl')
     n = len(df)
@@ -113,7 +124,7 @@ def load_data(split=0.7):
 
 def get_feature_model():
     embedding_dims = 64
-    max_features = 160001
+    max_features = 8001
     model = Sequential()
     model.add(Embedding(
         max_features,
@@ -184,7 +195,7 @@ def get_layers(inputs, node_output_dim=256):
 def model():
     # set parameters:
     batch_size = 64
-    nb_epoch = 20
+    nb_epoch = 10
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
@@ -293,10 +304,5 @@ def print_report(report, go_id):
         f.write(report + '\n')
 
 
-def main(*args, **kwargs):
-    with tf.device('/gpu:1'):
-        model()
-
-
 if __name__ == '__main__':
-    main(*sys.argv)
+    main()

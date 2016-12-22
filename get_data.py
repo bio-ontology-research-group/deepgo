@@ -78,8 +78,7 @@ def load_data():
                 i1 = AAINDEX[items[1][i]]
                 i2 = AAINDEX[items[1][i + 1]]
                 i3 = AAINDEX[items[1][i + 2]]
-                i4 = AAINDEX[items[1][i + 3]]
-                tri[i] = i1 * 8000 + i2 * 400 + i3 * 20 + i4 + 1
+                tri[i] = i1 * 400 + i2 * 20 + i3 + 1
             indexes.append(idx)
             trigrams.append(tri)
             label = [0] * len(functions)
