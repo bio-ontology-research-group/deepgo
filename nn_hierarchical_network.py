@@ -52,30 +52,42 @@ sys.setrecursionlimit(100000)
 DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 REPLEN = 384
-FUNCTION = 'mf'
-if len(sys.argv) > 1:
-    FUNCTION = sys.argv[1]
-
-GO_ID = FUNC_DICT[FUNCTION]
-go = get_gene_ontology('go.obo')
-ORG = ''
-
-func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
-functions = func_df['functions'].values
-func_set = set(functions)
-all_functions = get_go_set(go, GO_ID)
-logging.info(len(functions))
-go_indexes = dict()
-for ind, go_id in enumerate(functions):
-    go_indexes[go_id] = ind
 
 
 @ck.command()
 @ck.option(
+    '--function',
+    default='mf',
+    help='Ontology id (mf, bp, cc)')
+@ck.option(
     '--device',
     default='gpu:0',
     help='GPU or CPU device id')
-def main(device):
+@ck.option(
+    '--org',
+    default='',
+    help='Organism name')
+def main(function, device, org):
+    global FUNCTION
+    FUNCTION = function
+    GO_ID = FUNC_DICT[FUNCTION]
+    global go
+    go = get_gene_ontology('go.obo')
+    global ORG
+    ORG = org
+    func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
+    global functions
+    functions = func_df['functions'].values
+    global func_set
+    func_set = set(functions)
+    global all_functions
+    all_functions = get_go_set(go, GO_ID)
+    logging.info(len(functions))
+    global go_indexes
+    go_indexes = dict()
+    for ind, go_id in enumerate(functions):
+        go_indexes[go_id] = ind
+
     with tf.device('/' + device):
         model()
 
