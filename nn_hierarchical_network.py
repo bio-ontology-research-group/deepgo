@@ -70,6 +70,7 @@ REPLEN = 384
 def main(function, device, org):
     global FUNCTION
     FUNCTION = function
+    global GO_ID
     GO_ID = FUNC_DICT[FUNCTION]
     global go
     go = get_gene_ontology('go.obo')
