@@ -51,7 +51,7 @@ sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
-REPLEN = 384
+REPLEN = 256
 
 
 @ck.command()
@@ -105,6 +105,9 @@ def load_data(split=0.7):
     train_df = df.loc[index[:valid_n]]
     valid_df = df.loc[index[valid_n:train_n]]
     test_df = df.loc[index[train_n:]]
+    # print(len(test_df))
+    # test_df = test_df[test_df['orgs'] == '4932']
+    # print(len(test_df))
 
     def reshape(values):
         values = np.hstack(values).reshape(
@@ -136,7 +139,7 @@ def load_data(split=0.7):
 
 
 def get_feature_model():
-    embedding_dims = 64
+    embedding_dims = 128
     max_features = 8001
     model = Sequential()
     model.add(Embedding(
@@ -147,7 +150,7 @@ def get_feature_model():
     # model.add(LSTM(128, activation='relu'))
     model.add(Convolution1D(
         nb_filter=32,
-        filter_length=64,
+        filter_length=128,
         border_mode='valid',
         activation='relu',
         subsample_length=1))
@@ -183,7 +186,7 @@ def get_function_node(go_id, parent_models, output_dim):
     return net, output
 
 
-def get_layers(inputs, node_output_dim=256):
+def get_layers(inputs, node_output_dim=512):
     q = deque()
     layers = dict()
     layers[GO_ID] = {'net': inputs}
@@ -208,7 +211,7 @@ def get_layers(inputs, node_output_dim=256):
 def model():
     # set parameters:
     batch_size = 64
-    nb_epoch = 10
+    nb_epoch = 100
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")

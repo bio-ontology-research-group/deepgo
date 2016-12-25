@@ -120,6 +120,20 @@ def filter_data():
             f.write(line)
 
 
+def load_org_df():
+    proteins = list()
+    orgs = list()
+    with open('data/uniprot-all-org.tab') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            prot_id = items[0]
+            org_id = items[2]
+            proteins.append(prot_id)
+            orgs.append(org_id)
+    df = pd.DataFrame({'proteins': proteins, 'orgs': orgs})
+    return df
+
+
 def run(*args, **kwargs):
     proteins, sequences, indexes, gos, labels, trigrams = load_data()
     data = {
@@ -143,10 +157,14 @@ def run(*args, **kwargs):
         if prot_id in rep:
             net_rep = rep[prot_id]
             rep_n += 1
-        rep_list.append(np.concatenate((net_rep, text_rep)))
+        rep_list.append(net_rep)
     print(len(rep_list), rep_n, text_n)
     data['rep'] = rep_list
     df = pd.DataFrame(data)
+    org_df = load_org_df()
+    print(len(df))
+    df = pd.merge(df, org_df, on='proteins', how='left')
+    print(len(df))
     df.to_pickle(DATA_ROOT + TT + ORG + '-' + FUNCTION + '.pkl')
 
 
