@@ -304,7 +304,7 @@ def compute_performance(preds, labels, gos):
             if preds[i, j] == 1:
                 parents = get_parents(go, functions[j])
                 for p_id in parents:
-                    if preds[i, go_indexes[p_id]] != 1:
+                    if p_id != GO_ID and preds[i, go_indexes[p_id]] != 1:
                         print('Inconsistent predictions')
                         preds[i, go_indexes[p_id]] = 1
         tp = np.sum(preds[i, :] * labels[i, :])
