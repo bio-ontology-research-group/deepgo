@@ -67,7 +67,11 @@ REPLEN = 256
     '--org',
     default='',
     help='Organism name')
-def main(function, device, org):
+@ck.option(
+    '--threshold',
+    default=0.5,
+    help='Threshold for prediction')
+def main(function, device, org, threshold):
     global FUNCTION
     FUNCTION = function
     global GO_ID
@@ -76,6 +80,8 @@ def main(function, device, org):
     go = get_gene_ontology('go.obo')
     global ORG
     ORG = org
+    global THRESHOLD
+    THRESHOLD = threshold
     func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
     global functions
     functions = func_df['functions'].values
@@ -210,7 +216,7 @@ def get_layers(inputs, node_output_dim=256):
 
 def model():
     # set parameters:
-    batch_size = 64
+    batch_size = 128
     nb_epoch = 100
     nb_classes = len(functions)
     start_time = time.time()
@@ -225,7 +231,7 @@ def model():
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
     merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    layers = get_layers(merged)
+    layers = get_layers(BatchNormalization(merged))
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
@@ -279,6 +285,15 @@ def model():
     for i in xrange(len(preds)):
         preds[i] = preds[i].reshape(-1, 1)
     preds = np.concatenate(preds, axis=1)
+
+    for i in xrange(len(test_data[0])):
+        for j in xrange(len(functions)):
+            anchestors = get_anchestors(go, functions[j])
+            for p_id in anchestors:
+                if (p_id not in [GO_ID, functions[j]] and
+                        preds[i, go_indexes[p_id]] < preds[i, j]):
+                    preds[i, go_indexes[p_id]] = preds[i, j]
+
     f, p, r = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
     logging.info('F measure: \t %f %f %f' % (f, p, r))
@@ -294,19 +309,12 @@ def compute_roc(preds, labels):
 
 
 def compute_performance(preds, labels, gos):
-    preds = (preds > 0.5).astype(np.int32)
+    preds = (preds > THRESHOLD).astype(np.int32)
     total = 0
     f = 0.0
     p = 0.0
     r = 0.0
     for i in range(labels.shape[0]):
-        for j in xrange(len(functions)):
-            if preds[i, j] == 1:
-                parents = get_parents(go, functions[j])
-                for p_id in parents:
-                    if p_id != GO_ID and preds[i, go_indexes[p_id]] != 1:
-                        print('Inconsistent predictions')
-                        preds[i, go_indexes[p_id]] = 1
         tp = np.sum(preds[i, :] * labels[i, :])
         fp = np.sum(preds[i, :]) - tp
         fn = np.sum(labels[i, :]) - tp

@@ -178,13 +178,13 @@ def get_gene_ontology(filename='go.obo'):
         #             go[g_id]['children'] = set()
         #         go[g_id]['children'].add(go_id)
     # Rooting
-    go['root'] = dict()
-    go['root']['is_a'] = []
-    go['root']['children'] = [
-        BIOLOGICAL_PROCESS, MOLECULAR_FUNCTION, CELLULAR_COMPONENT]
-    go[BIOLOGICAL_PROCESS]['is_a'] = ['root']
-    go[MOLECULAR_FUNCTION]['is_a'] = ['root']
-    go[CELLULAR_COMPONENT]['is_a'] = ['root']
+    # go['root'] = dict()
+    # go['root']['is_a'] = []
+    # go['root']['children'] = [
+    #     BIOLOGICAL_PROCESS, MOLECULAR_FUNCTION, CELLULAR_COMPONENT]
+    # go[BIOLOGICAL_PROCESS]['is_a'] = ['root']
+    # go[MOLECULAR_FUNCTION]['is_a'] = ['root']
+    # go[CELLULAR_COMPONENT]['is_a'] = ['root']
 
     return go
 
