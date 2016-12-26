@@ -186,7 +186,7 @@ def get_function_node(go_id, parent_models, output_dim):
     return net, output
 
 
-def get_layers(inputs, node_output_dim=512):
+def get_layers(inputs, node_output_dim=256):
     q = deque()
     layers = dict()
     layers[GO_ID] = {'net': inputs}
@@ -247,6 +247,7 @@ def model():
     checkpointer = ModelCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True, save_weights_only=True)
+    earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))
     logging.info('Starting training the model')
@@ -265,7 +266,7 @@ def model():
         validation_data=valid_generator,
         nb_val_samples=len(val_data[0]),
         max_q_size=batch_size,
-        callbacks=[checkpointer])
+        callbacks=[checkpointer, earlystopper])
     model.save_weights(last_model_path)
 
     logging.info('Loading weights')
