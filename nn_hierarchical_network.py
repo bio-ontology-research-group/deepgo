@@ -231,7 +231,7 @@ def model():
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
     merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    layers = get_layers(BatchNormalization(merged))
+    layers = get_layers(BatchNormalization()(merged))
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
