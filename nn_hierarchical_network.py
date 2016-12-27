@@ -183,12 +183,14 @@ def merge_outputs(outputs, name):
 
 def get_function_node(go_id, parent_models, output_dim):
     ind = go_indexes[go_id]
-    name = get_node_name(ind * 3)
-    output_name = get_node_name(ind * 3 + 1)
-    merge_name = get_node_name(ind * 3 + 2)
+    name = get_node_name(ind * 4)
+    output_name = get_node_name(ind * 4 + 1)
+    merge_name = get_node_name(ind * 4 + 2)
+    merge_name2 = get_node_name(ind * 4 + 3)
     net = merge_outputs(parent_models, merge_name)
     net = Dense(output_dim, activation='relu', name=name)(net)
     output = Dense(1, activation='sigmoid', name=output_name)(net)
+    net = merge_outputs([output, net], name=merge_name2)
     return net, output
 
 

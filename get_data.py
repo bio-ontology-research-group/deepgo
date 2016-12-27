@@ -71,7 +71,7 @@ def load_data():
             proteins.append(items[0])
             sequences.append(items[1])
             idx = [0] * len(items[1])
-            tri = [0] * (len(items[1]) - 4)
+            tri = [0] * (len(items[1]) - 2)
             for i in range(len(idx)):
                 idx[i] = AAINDEX[items[1][i]] + 1
             for i in xrange(len(tri)):
