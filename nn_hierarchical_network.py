@@ -52,6 +52,7 @@ sys.setrecursionlimit(100000)
 DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 REPLEN = 256
+ind = 0
 
 
 @ck.command()
@@ -181,16 +182,17 @@ def merge_outputs(outputs, name):
     return merge(outputs, mode='concat', name=name, concat_axis=1)
 
 
-def get_function_node(go_id, parent_models, output_dim):
-    ind = go_indexes[go_id]
-    name = get_node_name(ind * 4)
-    output_name = get_node_name(ind * 4 + 1)
-    merge_name = get_node_name(ind * 4 + 2)
-    merge_name2 = get_node_name(ind * 4 + 3)
-    net = merge_outputs(parent_models, merge_name)
+def next_ind():
+    global ind
+    ind += 1
+    return ind
+
+
+def get_function_node(go_id, net, output_dim):
+    name = get_node_name(next_ind())
+    output_name = get_node_name(next_ind())
     net = Dense(output_dim, activation='relu', name=name)(net)
     output = Dense(1, activation='sigmoid', name=output_name)(net)
-    net = merge_outputs([output, net], name=merge_name2)
     return net, output
 
 
@@ -200,20 +202,30 @@ def get_layers(inputs, node_output_dim=256):
     layers[GO_ID] = {'net': inputs}
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
-            q.append((node_id, node_output_dim))
+            q.append((node_id, inputs))
     while len(q) > 0:
-        node_id, output_dim = q.popleft()
-        parents = get_parents(go, node_id)
-        parent_models = []
-        for parent_id in parents:
-            if parent_id in layers:
-                parent_models.append(layers[parent_id]['net'])
-        net, output = get_function_node(node_id, parent_models, output_dim)
-        layers[node_id] = {'net': net, 'output': output}
+        node_id, net = q.popleft()
+        net, output = get_function_node(node_id, net, node_output_dim)
+        if node_id not in layers:
+            layers[node_id] = {'nets': [net], 'outputs': [output]}
+        else:
+            layers[node_id]['nets'].append(net)
+            layers[node_id]['outputs'].append(output)
         for n_id in go[node_id]['children']:
             if n_id in func_set:
-                q.append((n_id, output_dim))
+                q.append((n_id, net))
     return layers
+
+
+def get_layers_dfs(inputs, node_output_dim):
+    layers = dict()
+    layers[GO_ID] = {'net': inputs}
+
+    def dfs(node_id):
+        pass
+    for node_id in go[GO_ID]['children']:
+        if node_id in func_set:
+            pass
 
 
 def model():
@@ -236,7 +248,12 @@ def model():
     layers = get_layers(merged)
     output_models = []
     for i in range(len(functions)):
-        output_models.append(layers[functions[i]]['output'])
+        outputs = layers[functions[i]]['outputs']
+        if len(outputs) == 1:
+            output_models.append(outputs[0])
+        else:
+            name = get_node_name(next_ind())
+            output_models.append(merge(outputs, mode='max', name=name))
     model = Model(input=[inputs, inputs2], output=output_models)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
@@ -294,6 +311,8 @@ def model():
             for p_id in anchestors:
                 if (p_id not in [GO_ID, functions[j]] and
                         preds[i, go_indexes[p_id]] < preds[i, j]):
+                    if preds[i, go_indexes[p_id]] <= THRESHOLD and preds[i, j] > THRESHOLD:
+                        print('Inconsistent')
                     preds[i, go_indexes[p_id]] = preds[i, j]
 
     f, p, r = compute_performance(preds, test_labels, test_gos)
