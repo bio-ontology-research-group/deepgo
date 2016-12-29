@@ -191,9 +191,49 @@ def next_ind():
 def get_function_node(go_id, net, output_dim):
     name = get_node_name(next_ind())
     output_name = get_node_name(next_ind())
+    merge_name = get_node_name(next_ind())
     net = Dense(output_dim, activation='relu', name=name)(net)
     output = Dense(1, activation='sigmoid', name=output_name)(net)
+    net = merge_outputs([output, net], merge_name)
     return net, output
+
+
+def get_layers_stack(inputs, node_output_dim=256):
+    q = deque()
+    v = set()
+    layers = dict()
+    layers[GO_ID] = {'net': inputs}
+    for node_id in go[GO_ID]['children']:
+        if node_id in func_set:
+            q.append((node_id, inputs))
+
+    while len(q) > 0:
+        node_id, net = q[-1]
+        childs = [
+            n_id for n_id in go[node_id]['children'] if n_id in func_set]
+        if node_id not in v:
+            v.add(node_id)
+            net, output = get_function_node(node_id, net, node_output_dim)
+            if node_id not in layers:
+                layers[node_id] = {'nets': [net], 'outputs': [output]}
+            else:
+                layers[node_id]['nets'].append(net)
+                layers[node_id]['outputs'].append(output)
+            for n_id in childs:
+                if n_id not in v:
+                    q.append((n_id, net))
+        else:
+            v.remove(node_id)
+            node_id, net = q.pop()
+            if len(childs) > 0:
+                outputs = [layers[node_id]['outputs'][-1]]
+                for n_id in childs:
+                    outputs.append(layers[n_id]['outputs'][-1])
+                name = get_node_name(next_ind())
+                output = merge(outputs, mode='max', name=name)
+                layers[node_id]['outputs'][-1] = output
+
+    return layers
 
 
 def get_layers(inputs, node_output_dim=256):
@@ -217,17 +257,6 @@ def get_layers(inputs, node_output_dim=256):
     return layers
 
 
-def get_layers_dfs(inputs, node_output_dim):
-    layers = dict()
-    layers[GO_ID] = {'net': inputs}
-
-    def dfs(node_id):
-        pass
-    for node_id in go[GO_ID]['children']:
-        if node_id in func_set:
-            pass
-
-
 def model():
     # set parameters:
     batch_size = 128
@@ -245,7 +274,7 @@ def model():
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
     merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    layers = get_layers(merged)
+    layers = get_layers_stack(merged)
     output_models = []
     for i in range(len(functions)):
         outputs = layers[functions[i]]['outputs']
