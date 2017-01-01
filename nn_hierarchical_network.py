@@ -204,10 +204,12 @@ def get_layers_stack(inputs, node_output_dim=256):
     v = set()
     layers = dict()
     layers[GO_ID] = {'net': inputs}
+    name = get_node_name(next_ind())
+    inputs = Dense(
+        node_output_dim, activation='relu', name=name)(inputs)
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
             q.append((node_id, inputs))
-
     while len(q) > 0:
         node_id, net = q[-1]
         childs = [
@@ -233,6 +235,41 @@ def get_layers_stack(inputs, node_output_dim=256):
                 name = get_node_name(next_ind())
                 output = merge(outputs, mode='max', name=name)
                 layers[node_id]['outputs'][-1] = output
+
+    return layers
+
+
+def get_layers_recursive(inputs, node_output_dim=256):
+    layers = dict()
+    name = get_node_name(next_ind())
+    inputs = Dense(
+        node_output_dim, activation='relu', name=name)(inputs)
+
+    def dfs(node_id, inputs):
+        net, output = get_function_node(node_id, inputs, node_output_dim)
+        childs = [
+            n_id for n_id in go[node_id]['children'] if n_id in func_set]
+        if len(childs) == 0:
+            if node_id not in layers:
+                layers[node_id] = {'outputs': [output]}
+            else:
+                layers[node_id]['outputs'].append(output)
+            return output
+        outputs = [output]
+        for ch_id in childs:
+            out = dfs(ch_id, net)
+            outputs.append(out)
+        name = get_node_name(next_ind())
+        output = merge(outputs, mode='max', name=name)
+        if node_id not in layers:
+            layers[node_id] = {'outputs': [output]}
+        else:
+            layers[node_id]['outputs'].append(output)
+        return output
+
+    for node_id in go[GO_ID]['children']:
+        if node_id in func_set:
+            dfs(node_id, inputs)
 
     return layers
 
@@ -278,7 +315,7 @@ def model():
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
     merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    layers = get_layers(merged)
+    layers = get_layers_recursive(merged)
     output_models = []
     for i in range(len(functions)):
         outputs = layers[functions[i]]['outputs']
@@ -293,6 +330,7 @@ def model():
     model_json = model.to_json()
     with open(DATA_ROOT + 'model_' + FUNCTION + ORG + '.json', 'w') as f:
         f.write(model_json)
+    # return
     logging.info('Compiling the model')
     optimizer = RMSprop()
 
