@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-OMP_NUM_THREADS=64 THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python nn_hierarchical_network.py
+python nn_hierarchical_network.py
 """
 
 import numpy as np
@@ -31,6 +31,7 @@ from utils import (
     FUNC_DICT)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
+from keras.utils.visualize_util import plot, model_to_dot
 from keras import backend as K
 import sys
 from aaindex import (
@@ -188,13 +189,13 @@ def next_ind():
     return ind
 
 
-def get_function_node(go_id, net, output_dim):
+def get_function_node(go_id, inputs, output_dim):
     name = get_node_name(next_ind())
     output_name = get_node_name(next_ind())
     merge_name = get_node_name(next_ind())
-    net = Dense(output_dim, activation='relu', name=name)(net)
+    net = Dense(output_dim, activation='relu', name=name)(inputs)
     output = Dense(1, activation='sigmoid', name=output_name)(net)
-    net = merge_outputs([output, net], merge_name)
+    net = merge([net, inputs], mode='sum', name=merge_name)
     return net, output
 
 
@@ -239,6 +240,9 @@ def get_layers_stack(inputs, node_output_dim=256):
 def get_layers(inputs, node_output_dim=256):
     q = deque()
     layers = dict()
+    name = get_node_name(next_ind())
+    inputs = Dense(
+        node_output_dim, activation='relu', name=name)(inputs)
     layers[GO_ID] = {'net': inputs}
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
@@ -274,7 +278,7 @@ def model():
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
     merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    layers = get_layers_stack(merged)
+    layers = get_layers(merged)
     output_models = []
     for i in range(len(functions)):
         outputs = layers[functions[i]]['outputs']
@@ -291,6 +295,7 @@ def model():
         f.write(model_json)
     logging.info('Compiling the model')
     optimizer = RMSprop()
+
     model.compile(
         optimizer=optimizer,
         loss='binary_crossentropy')

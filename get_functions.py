@@ -17,7 +17,7 @@ from multiprocessing import Pool
 DATA_ROOT = 'data/cafa3/'
 ORG = ''
 FILENAME = 'data' + ORG + '.txt'
-ANNOT_NUM = 50
+ANNOT_NUM = 2000
 FUNCTION = 'cc'
 
 GO_ID = FUNC_DICT[FUNCTION]
