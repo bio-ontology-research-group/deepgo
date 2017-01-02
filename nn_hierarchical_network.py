@@ -27,7 +27,6 @@ from utils import (
     MOLECULAR_FUNCTION,
     CELLULAR_COMPONENT,
     DataGenerator,
-    get_node_name,
     FUNC_DICT)
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.preprocessing import sequence
@@ -41,6 +40,7 @@ import time
 import logging
 import tensorflow as tf
 from sklearn.metrics import roc_curve, auc
+import warnings
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -54,6 +54,90 @@ DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
+
+
+def save_model_weights(model, filepath):
+    if hasattr(model, 'flattened_layers'):
+        # Support for legacy Sequential/Merge behavior.
+        flattened_layers = model.flattened_layers
+    else:
+        flattened_layers = model.layers
+
+    l_names = []
+    w_values = []
+    for layer in flattened_layers:
+        layer_name = layer.name
+        symbolic_weights = layer.weights
+        weight_values = K.batch_get_value(symbolic_weights)
+        if weight_values:
+            l_names.append(layer_name)
+            w_values.append(weight_values)
+    df = pd.DataFrame({
+        'layer_names': l_names,
+        'weight_values': w_values})
+    df.to_pickle(filepath)
+
+
+def load_model_weights(model, filepath):
+    ''' Name-based weight loading
+    Layers that have no matching name are skipped.
+    '''
+    if hasattr(model, 'flattened_layers'):
+        # Support for legacy Sequential/Merge behavior.
+        flattened_layers = model.flattened_layers
+    else:
+        flattened_layers = model.layers
+
+    df = pd.read_pickle(filepath)
+
+    # Reverse index of layer name to list of layers with name.
+    index = {}
+    for layer in flattened_layers:
+        if layer.name:
+            index[layer.name] = layer
+
+    # We batch weight value assignments in a single backend call
+    # which provides a speedup in TensorFlow.
+    weight_value_tuples = []
+    for row in df.iterrows():
+        row = row[1]
+        name = row['layer_names']
+        weight_values = row['weight_values']
+        if name in index:
+            symbolic_weights = index[name].weights
+            if len(weight_values) != len(symbolic_weights):
+                raise Exception('Layer named "' + layer.name +
+                                '") expects ' + str(len(symbolic_weights)) +
+                                ' weight(s), but the saved weights' +
+                                ' have ' + str(len(weight_values)) +
+                                ' element(s).')
+            # Set values.
+            for i in range(len(weight_values)):
+                weight_value_tuples.append(
+                    (symbolic_weights[i], weight_values[i]))
+    K.batch_set_value(weight_value_tuples)
+
+
+class MyCheckpoint(ModelCheckpoint):
+    def on_epoch_end(self, epoch, logs={}):
+        filepath = self.filepath.format(epoch=epoch, **logs)
+        current = logs.get(self.monitor)
+        if current is None:
+            warnings.warn('Can save best model only with %s available, '
+                          'skipping.' % (self.monitor), RuntimeWarning)
+        else:
+            if self.monitor_op(current, self.best):
+                if self.verbose > 0:
+                    print('Epoch %05d: %s improved from %0.5f to %0.5f,'
+                          ' saving model to %s'
+                          % (epoch, self.monitor, self.best,
+                             current, filepath))
+                self.best = current
+                save_model_weights(self.model, filepath)
+            else:
+                if self.verbose > 0:
+                    print('Epoch %05d: %s did not improve' %
+                          (epoch, self.monitor))
 
 
 @ck.command()
@@ -96,9 +180,11 @@ def main(function, device, org, threshold):
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
         go_indexes[go_id] = ind
-
-    with tf.device('/' + device):
-        model()
+    global dev
+    dev = device
+    global node_names
+    node_names = set()
+    model()
 
 
 def load_data(split=0.7):
@@ -183,16 +269,23 @@ def merge_outputs(outputs, name):
     return merge(outputs, mode='concat', name=name, concat_axis=1)
 
 
-def next_ind():
-    global ind
-    ind += 1
-    return ind
+def get_node_name(go_id):
+    name = go_id.split(':')[1]
+    if name not in node_names:
+        node_names.add(name)
+        return name
+    i = 1
+    while (name + '_' + str(i)) in node_names:
+        i += 1
+    name = name + '_' + str(i)
+    node_names.add(name)
+    return name
 
 
 def get_function_node(go_id, inputs, output_dim):
-    name = get_node_name(next_ind())
-    output_name = get_node_name(next_ind())
-    merge_name = get_node_name(next_ind())
+    name = get_node_name(go_id)
+    output_name = name + '_out'
+    merge_name = name + '_sum'
     net = Dense(output_dim, activation='relu', name=name)(inputs)
     output = Dense(1, activation='sigmoid', name=output_name)(net)
     net = merge([net, inputs], mode='sum', name=merge_name)
@@ -204,7 +297,7 @@ def get_layers_stack(inputs, node_output_dim=256):
     v = set()
     layers = dict()
     layers[GO_ID] = {'net': inputs}
-    name = get_node_name(next_ind())
+    name = get_node_name(GO_ID)
     inputs = Dense(
         node_output_dim, activation='relu', name=name)(inputs)
     for node_id in go[GO_ID]['children']:
@@ -232,7 +325,7 @@ def get_layers_stack(inputs, node_output_dim=256):
                 outputs = [layers[node_id]['outputs'][-1]]
                 for n_id in childs:
                     outputs.append(layers[n_id]['outputs'][-1])
-                name = get_node_name(next_ind())
+                name = get_node_name(node_id) + '_max'
                 output = merge(outputs, mode='max', name=name)
                 layers[node_id]['outputs'][-1] = output
 
@@ -241,7 +334,7 @@ def get_layers_stack(inputs, node_output_dim=256):
 
 def get_layers_recursive(inputs, node_output_dim=256):
     layers = dict()
-    name = get_node_name(next_ind())
+    name = get_node_name(GO_ID)
     inputs = Dense(
         node_output_dim, activation='relu', name=name)(inputs)
 
@@ -259,7 +352,7 @@ def get_layers_recursive(inputs, node_output_dim=256):
         for ch_id in childs:
             out = dfs(ch_id, net)
             outputs.append(out)
-        name = get_node_name(next_ind())
+        name = get_node_name(node_id) + '_max'
         output = merge(outputs, mode='max', name=name)
         if node_id not in layers:
             layers[node_id] = {'outputs': [output]}
@@ -277,7 +370,7 @@ def get_layers_recursive(inputs, node_output_dim=256):
 def get_layers(inputs, node_output_dim=256):
     q = deque()
     layers = dict()
-    name = get_node_name(next_ind())
+    name = get_node_name(GO_ID)
     inputs = Dense(
         node_output_dim, activation='relu', name=name)(inputs)
     layers[GO_ID] = {'net': inputs}
@@ -311,37 +404,37 @@ def model():
     test_data, test_labels = test
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Building the model")
-    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
-    feature_model = get_feature_model()(inputs)
-    merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    layers = get_layers_recursive(merged)
-    output_models = []
-    for i in range(len(functions)):
-        outputs = layers[functions[i]]['outputs']
-        if len(outputs) == 1:
-            output_models.append(outputs[0])
-        else:
-            name = get_node_name(next_ind())
-            output_models.append(merge(outputs, mode='max', name=name))
-    model = Model(input=[inputs, inputs2], output=output_models)
-    logging.info('Model built in %d sec' % (time.time() - start_time))
-    logging.info('Saving the model')
-    model_json = model.to_json()
-    with open(DATA_ROOT + 'model_' + FUNCTION + ORG + '.json', 'w') as f:
-        f.write(model_json)
-    # return
-    logging.info('Compiling the model')
-    optimizer = RMSprop()
+    with tf.device('/' + dev):
+        inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
+        inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
+        feature_model = get_feature_model()(inputs)
+        merged = merge([feature_model, inputs2], mode='concat', name='merged')
+        layers = get_layers_recursive(merged)
+        output_models = []
+        for i in range(len(functions)):
+            outputs = layers[functions[i]]['outputs']
+            if len(outputs) == 1:
+                output_models.append(outputs[0])
+            else:
+                name = get_node_name(functions[i]) + '_out_max'
+                output_models.append(merge(outputs, mode='max', name=name))
+        model = Model(input=[inputs, inputs2], output=output_models)
+        logging.info('Model built in %d sec' % (time.time() - start_time))
+        logging.info('Saving the model')
+        model_json = model.to_json()
+        with open(DATA_ROOT + 'model_' + FUNCTION + ORG + '.json', 'w') as f:
+            f.write(model_json)
+        # return
+        logging.info('Compiling the model')
+        optimizer = RMSprop()
 
-    model.compile(
-        optimizer=optimizer,
-        loss='binary_crossentropy')
+        model.compile(
+            optimizer=optimizer,
+            loss='binary_crossentropy')
 
-    model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.h5'
-    last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.last.h5'
-
-    checkpointer = ModelCheckpoint(
+    model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.pkl'
+    last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.last.pkl'
+    checkpointer = MyCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True, save_weights_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
@@ -355,24 +448,26 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit((test_data[0], test_data[1]), test_labels)
-
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data[0]),
-        nb_epoch=nb_epoch,
-        validation_data=valid_generator,
-        nb_val_samples=len(val_data[0]),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
-    model.save_weights(last_model_path)
+    with tf.device('/' + dev):
+        model.fit_generator(
+            train_generator,
+            samples_per_epoch=len(train_data[0]),
+            nb_epoch=nb_epoch,
+            validation_data=valid_generator,
+            nb_val_samples=len(val_data[0]),
+            max_q_size=batch_size,
+            callbacks=[checkpointer, earlystopper])
+    save_model_weights(model, last_model_path)
 
     logging.info('Loading weights')
-    model.load_weights(model_path)
+    load_model_weights(model, model_path)
+
     output_test = []
     for i in range(len(functions)):
         output_test.append(np.array(test_labels[i]))
-    preds = model.predict_generator(
-        test_generator, val_samples=len(test_data[0]))
+    with tf.device('/' + dev):
+        preds = model.predict_generator(
+            test_generator, val_samples=len(test_data[0]))
     for i in xrange(len(preds)):
         preds[i] = preds[i].reshape(-1, 1)
     preds = np.concatenate(preds, axis=1)
