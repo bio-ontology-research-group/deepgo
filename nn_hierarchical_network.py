@@ -269,6 +269,12 @@ def merge_outputs(outputs, name):
     return merge(outputs, mode='concat', name=name, concat_axis=1)
 
 
+def merge_nets(nets, name):
+    if len(nets) == 1:
+        return nets[0]
+    return merge(nets, mode='sum', name=name)
+
+
 def get_node_name(go_id):
     name = go_id.split(':')[1]
     if name not in node_names:
@@ -290,46 +296,6 @@ def get_function_node(go_id, inputs, output_dim):
     output = Dense(1, activation='sigmoid', name=output_name)(net)
     net = merge([net, inputs], mode='sum', name=merge_name)
     return net, output
-
-
-def get_layers_stack(inputs, node_output_dim=256):
-    q = deque()
-    v = set()
-    layers = dict()
-    layers[GO_ID] = {'net': inputs}
-    name = get_node_name(GO_ID)
-    inputs = Dense(
-        node_output_dim, activation='relu', name=name)(inputs)
-    for node_id in go[GO_ID]['children']:
-        if node_id in func_set:
-            q.append((node_id, inputs))
-    while len(q) > 0:
-        node_id, net = q[-1]
-        childs = [
-            n_id for n_id in go[node_id]['children'] if n_id in func_set]
-        if node_id not in v:
-            v.add(node_id)
-            net, output = get_function_node(node_id, net, node_output_dim)
-            if node_id not in layers:
-                layers[node_id] = {'nets': [net], 'outputs': [output]}
-            else:
-                layers[node_id]['nets'].append(net)
-                layers[node_id]['outputs'].append(output)
-            for n_id in childs:
-                if n_id not in v:
-                    q.append((n_id, net))
-        else:
-            v.remove(node_id)
-            node_id, net = q.pop()
-            if len(childs) > 0:
-                outputs = [layers[node_id]['outputs'][-1]]
-                for n_id in childs:
-                    outputs.append(layers[n_id]['outputs'][-1])
-                name = get_node_name(node_id) + '_max'
-                output = merge(outputs, mode='max', name=name)
-                layers[node_id]['outputs'][-1] = output
-
-    return layers
 
 
 def get_layers_recursive(inputs, node_output_dim=256):
@@ -369,11 +335,10 @@ def get_layers_recursive(inputs, node_output_dim=256):
 
 def get_layers(inputs, node_output_dim=256):
     q = deque()
-    layers = dict()
+    layers = {}
     name = get_node_name(GO_ID)
     inputs = Dense(
         node_output_dim, activation='relu', name=name)(inputs)
-    layers[GO_ID] = {'net': inputs}
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
             q.append((node_id, inputs))
@@ -381,13 +346,15 @@ def get_layers(inputs, node_output_dim=256):
         node_id, net = q.popleft()
         net, output = get_function_node(node_id, net, node_output_dim)
         if node_id not in layers:
-            layers[node_id] = {'nets': [net], 'outputs': [output]}
-        else:
-            layers[node_id]['nets'].append(net)
-            layers[node_id]['outputs'].append(output)
-        for n_id in go[node_id]['children']:
-            if n_id in func_set:
-                q.append((n_id, net))
+            layers[node_id] = {'net': net, 'output': output}
+            for n_id in go[node_id]['children']:
+                parent_nets = []
+                for p_id in get_parents(go, n_id):
+                    parent_nets.append(layers[p_id]['net'])
+                name = get_node_name(n_id) + '_parents'
+                net = merge_nets(parent_nets, name)
+                if n_id in func_set and n_id not in layers:
+                    q.append((n_id, net))
     return layers
 
 
