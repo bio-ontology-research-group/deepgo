@@ -65,7 +65,6 @@ def load_data():
                     go_set |= get_anchestors(go, go_id)
             if not go_set or GO_ID not in go_set:
                 continue
-            go_set.remove('root')
             go_set.remove(GO_ID)
             gos.append(go_list)
             proteins.append(items[0])

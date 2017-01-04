@@ -145,13 +145,6 @@ def get_gene_ontology(filename='go.obo'):
                     obj['is_a'].append(l[1].split(' ! ')[0])
                 elif l[0] == 'name':
                     obj['name'] = l[1]
-
-                # elif l[0] == 'relationship':
-                #     r = l[1].split(' ')
-                #     if r[0] == 'part_of':
-                #         obj['part_of'].append(r[1])
-                #     elif r[0] == 'regulates':
-                #         obj['regulates'].append(r[1])
                 elif l[0] == 'is_obsolete' and l[1] == 'true':
                     obj['is_obsolete'] = True
     if obj is not None:
@@ -162,30 +155,11 @@ def get_gene_ontology(filename='go.obo'):
     for go_id, val in go.iteritems():
         if 'children' not in val:
             val['children'] = set()
-        for g_id in val['is_a']:
-            if g_id in go:
-                if 'children' not in go[g_id]:
-                    go[g_id]['children'] = set()
-                go[g_id]['children'].add(go_id)
-        # for g_id in val['part_of']:
-        #     if g_id in go:
-        #         if 'children' not in go[g_id]:
-        #             go[g_id]['children'] = set()
-        #         go[g_id]['children'].add(go_id)
-        # for g_id in val['regulates']:
-        #     if g_id in go:
-        #         if 'children' not in go[g_id]:
-        #             go[g_id]['children'] = set()
-        #         go[g_id]['children'].add(go_id)
-    # Rooting
-    # go['root'] = dict()
-    # go['root']['is_a'] = []
-    # go['root']['children'] = [
-    #     BIOLOGICAL_PROCESS, MOLECULAR_FUNCTION, CELLULAR_COMPONENT]
-    # go[BIOLOGICAL_PROCESS]['is_a'] = ['root']
-    # go[MOLECULAR_FUNCTION]['is_a'] = ['root']
-    # go[CELLULAR_COMPONENT]['is_a'] = ['root']
-
+        for p_id in val['is_a']:
+            if p_id in go:
+                if 'children' not in go[p_id]:
+                    go[p_id]['children'] = set()
+                go[p_id]['children'].add(go_id)
     return go
 
 

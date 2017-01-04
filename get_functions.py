@@ -12,55 +12,44 @@ from utils import (
     CELLULAR_COMPONENT,
     FUNC_DICT)
 from multiprocessing import Pool
+from collections import deque
 
 
 DATA_ROOT = 'data/cafa3/'
 ORG = ''
 FILENAME = 'data' + ORG + '.txt'
-ANNOT_NUM = 2000
-FUNCTION = 'cc'
+ANNOT_NUM = 50
+FUNCTION = 'mf'
 
 GO_ID = FUNC_DICT[FUNCTION]
 FUNCTION += ORG
 
 go = get_gene_ontology('go.obo')
-# functions = get_go_sets(
-#     go, [MOLECULAR_FUNCTION, BIOLOGICAL_PROCESS, CELLULAR_COMPONENT])
 
-functions = get_go_set(go, GO_ID)
+functions = deque()
+
+
+# Add functions to deque in topological order
+def dfs(go_id):
+    if go_id not in functions:
+        for ch_id in go[go_id]['children']:
+            dfs(ch_id)
+        functions.append(go_id)
+
+
+dfs(GO_ID)
 functions.remove(GO_ID)
+functions.reverse()
 functions = list(functions)
+print(len(functions))
 func_set = set(functions)
-print len(functions)
 go_indexes = dict()
 for ind, go_id in enumerate(functions):
     go_indexes[go_id] = ind
 
-used = set()
-iters = 0
-classes = set()
-
-
-def dfs(go_id):
-    used.add(go_id)
-    classes.add(go_id)
-    global iters
-    iters += 1
-    for ch_id in go[go_id]['children']:
-        if ch_id not in used:
-            dfs(ch_id)
-        else:
-            print 'CYCLE'
-    used.remove(go_id)
-
-
-def filter_functions(go_id):
-    if 'annots' in go[go_id] and go[go_id]['annots'] >= ANNOT_NUM:
-        return go_id
-    return None
-
 
 def get_functions():
+    annots = dict()
     with open(DATA_ROOT + FILENAME, 'r') as f:
         for line in f:
             items = line.strip().split('\t')
@@ -69,14 +58,12 @@ def get_functions():
                 if go_id in func_set:
                     go_set |= get_anchestors(go, go_id)
             for go_id in go_set:
-                if 'annots' not in go[go_id]:
-                    go[go_id]['annots'] = 0
-                go[go_id]['annots'] += 1
+                if go_id not in annots:
+                    annots[go_id] = 0
+                annots[go_id] += 1
     filtered = list()
-    pool = Pool(64)
-    funcs = pool.map(filter_functions, functions)
-    for go_id in funcs:
-        if go_id:
+    for go_id in functions:
+        if go_id in annots and annots[go_id] >= ANNOT_NUM:
             filtered.append(go_id)
     print len(filtered)
     df = pd.DataFrame({'functions': filtered})
@@ -86,6 +73,7 @@ def get_functions():
 
 def main(*args, **kwargs):
     get_functions()
+
 
 if __name__ == '__main__':
     main(*sys.argv)

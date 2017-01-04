@@ -5,7 +5,7 @@ from keras.utils.visualize_util import plot, model_to_dot
 
 
 def main():
-    with open('data/cafa3/model_mf.json') as f:
+    with open('data/cafa3/model_cc.json') as f:
         json_string = next(f)
     model = model_from_json(json_string)
 
