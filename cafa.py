@@ -26,7 +26,7 @@ def read_fasta(filename):
             if line.startswith('>'):
                 if seq != '':
                     data.append(seq)
-                line = line[1:]
+                line = line[1:].split()[0]
                 seq = line + '\t'
             else:
                 seq += line
@@ -83,7 +83,7 @@ def fasta2tabs():
 
 def sprot2tabs():
     data = read_fasta('data/uniprot_sprot.fasta')
-    with open('data/cafa2/uniprot_sprot.tab', 'w') as f:
+    with open('data/cafa3/uniprot_sprot.tab', 'w') as f:
         for line in data:
             f.write(line + '\n')
 
@@ -163,7 +163,8 @@ def main(*args, **kwargs):
     # cafa3()
     # fasta2tabs()
     # cafa2string()
-    get_annotations()
+    # get_annotations()
+    sprot2tabs()
 
 
 if __name__ == '__main__':
