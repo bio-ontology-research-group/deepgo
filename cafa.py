@@ -50,7 +50,7 @@ def get_annotations():
                     w.write('\n')
                 prot_id = items[1]
                 annots = list()
-            elif items[0] == 'AC':
+            elif items[0] == 'AC' and len(items) > 1:
                 prot_ac = items[1]
             elif items[0] == 'DR' and len(items) > 1:
                 items = items[1].split('; ')
