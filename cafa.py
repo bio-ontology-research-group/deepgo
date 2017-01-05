@@ -35,27 +35,32 @@ def read_fasta(filename):
 
 
 def get_annotations():
-    w = open('data/cafa2/annotations_2014.tab', 'w')
-    with open('data/uniprot_sprot_2014.dat', 'r') as f:
-        prot = ''
+    w = open('data/cafa3/swissprot.tab', 'w')
+    with open('data/uniprot_sprot.dat', 'r') as f:
+        prot_id = ''
+        prot_ac = ''
         annots = list()
         for line in f:
             items = line.strip().split('   ')
             if items[0] == 'ID' and len(items) > 1:
-                if prot != '' and len(annots) > 0:
-                    w.write(prot)
+                if prot_id != '' and len(annots) > 0:
+                    w.write(prot_id + '\t' + prot_ac)
                     for go_id in annots:
                         w.write('\t' + go_id)
                     w.write('\n')
-                prot = items[1]
-
+                prot_id = items[1]
                 annots = list()
+            elif items[0] == 'AC':
+                prot_ac = items[1]
             elif items[0] == 'DR' and len(items) > 1:
                 items = items[1].split('; ')
                 if items[0] == 'GO':
-                    annots.append(items[1])
+                    go_id = items[1]
+                    code = items[3].split(':')[0]
+                    annots.append(go_id + '|' + code)
+
         if len(annots) > 0:
-            w.write(prot)
+            w.write(prot_id + '\t' + prot_ac)
             for go_id in annots:
                 w.write('\t' + go_id)
             w.write('\n')
@@ -156,8 +161,9 @@ def cafa2string():
 def main(*args, **kwargs):
     # get_data()
     # cafa3()
-    fasta2tabs()
+    # fasta2tabs()
     # cafa2string()
+    get_annotations()
 
 
 if __name__ == '__main__':
