@@ -52,7 +52,7 @@ def load_data():
     df = pd.read_pickle(DATA_ROOT + 'ngrams.pkl')
     vocab = {}
     for key, gram in enumerate(df['ngrams']):
-        vocab[gram] = key
+        vocab[gram] = key + 1
     gram_len = len(df['ngrams'][0])
     print('Gram length:', gram_len)
     print('Vocabulary size:', len(vocab))

@@ -233,8 +233,8 @@ def load_data(split=0.7):
 
 
 def get_feature_model():
-    embedding_dims = 64
-    max_features = 2958621
+    embedding_dims = 128
+    max_features = 8001
     model = Sequential()
     model.add(Embedding(
         max_features,
@@ -384,7 +384,8 @@ def get_layers(inputs, node_output_dim=256):
             for ch_id in childs:
                 outputs.append(layers[ch_id]['output'])
             name = get_node_name(node_id) + '_max'
-            layers[node_id]['output'] = merge(outputs, mode='max', name=name)
+            layers[node_id]['output'] = merge(
+                outputs, mode='max', name=name)
     return layers
 
 
@@ -458,14 +459,12 @@ def model():
     logging.info('Loading weights')
     load_model_weights(model, model_path)
 
-    output_test = []
-    for i in range(len(functions)):
-        output_test.append(np.array(test_labels[i]))
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data[0]))
     for i in xrange(len(preds)):
         preds[i] = preds[i].reshape(-1, 1)
     preds = np.concatenate(preds, axis=1)
+
     incon = 0
     for i in xrange(len(test_data[0])):
         for j in xrange(len(functions)):
@@ -477,9 +476,9 @@ def model():
                     preds[i, go_indexes[p_id]] = preds[i, j]
     # f, p, r = compute_similarity_performance(train_df, test_df, preds)
     # logging.info('F measure cosine: \t %f %f %f' % (f, p, r))
-    f, p, r = compute_performance(preds, test_labels, test_gos)
+    f, p, r, t = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
-    logging.info('F measure: \t %f %f %f' % (f, p, r))
+    logging.info('F measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('Inconsistent predictions: %d' % incon)
     logging.info('Done in %d sec' % (time.time() - start_time))
@@ -493,14 +492,14 @@ def compute_roc(preds, labels):
 
 
 def compute_performance(preds, labels, gos):
-    preds = (preds > THRESHOLD).astype(np.int32)
+    predictions = (preds > THRESHOLD).astype(np.int32)
     total = 0
     f = 0.0
     p = 0.0
     r = 0.0
     for i in range(labels.shape[0]):
-        tp = np.sum(preds[i, :] * labels[i, :])
-        fp = np.sum(preds[i, :]) - tp
+        tp = np.sum(predictions[i, :] * labels[i, :])
+        fp = np.sum(predictions[i, :]) - tp
         fn = np.sum(labels[i, :]) - tp
         if tp == 0 and fp == 0 and fn == 0:
             continue
@@ -511,7 +510,10 @@ def compute_performance(preds, labels, gos):
             p += precision
             r += recall
             f += 2 * precision * recall / (precision + recall)
-    return f / total, p / total, r / total
+    f /= total
+    r /= total
+    p /= total
+    return f, p, r
 
 
 def get_gos(pred):
