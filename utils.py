@@ -1,8 +1,10 @@
-import numpy as np
 from collections import deque
-from sklearn.preprocessing import OneHotEncoder
-from aaindex import AAINDEX
 import string
+from keras import backend as K
+from keras.callbacks import ModelCheckpoint
+import warnings
+import pandas as pd
+
 
 BIOLOGICAL_PROCESS = 'GO:0008150'
 MOLECULAR_FUNCTION = 'GO:0003674'
@@ -11,61 +13,6 @@ FUNC_DICT = {
     'cc': CELLULAR_COMPONENT,
     'mf': MOLECULAR_FUNCTION,
     'bp': BIOLOGICAL_PROCESS}
-
-DIGITS = string.digits + string.letters
-BASE = len(DIGITS)
-
-
-def get_node_name(n):
-    if n == 0:
-        return '0'
-    ret = ''
-    while n > 0:
-        ret = ret + DIGITS[n % BASE]
-        n /= BASE
-    return ret
-
-
-class DataGenerator(object):
-
-    def __init__(self, batch_size, num_outputs):
-        self.batch_size = batch_size
-        self.num_outputs = num_outputs
-
-    def fit(self, inputs, targets):
-        self.start = 0
-        self.inputs = inputs
-        self.targets = targets
-        self.size = len(self.inputs)
-        if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
-            self.size = len(self.inputs[0])
-
-    def __next__(self):
-        return self.next()
-
-    def reset(self):
-        self.start = 0
-
-    def next(self):
-        if self.start < self.size:
-            output = []
-            labels = self.targets
-            for i in range(self.num_outputs):
-                output.append(
-                    labels[self.start:(self.start + self.batch_size), i])
-            if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
-                res_inputs = []
-                for inp in self.inputs:
-                    res_inputs.append(
-                        inp[self.start:(self.start + self.batch_size)])
-            else:
-                res_inputs = self.inputs[self.start:(
-                    self.start + self.batch_size)]
-            self.start += self.batch_size
-            return (res_inputs, output)
-        else:
-            self.reset()
-            return self.next()
 
 
 def get_ipro():
@@ -173,12 +120,6 @@ def get_anchestors(go, go_id):
         for parent_id in go[g_id]['is_a']:
             if parent_id in go:
                 q.append(parent_id)
-        # for parent_id in go[g_id]['part_of']:
-        #     if parent_id in go:
-        #         q.append(parent_id)
-        # for parent_id in go[g_id]['regulates']:
-        #     if parent_id in go:
-        #         q.append(parent_id)
     return go_set
 
 
@@ -187,25 +128,6 @@ def get_parents(go, go_id):
     for parent_id in go[go_id]['is_a']:
         if parent_id in go:
             go_set.add(parent_id)
-    # for parent_id in go[go_id]['part_of']:
-    #     if parent_id in go:
-    #         go_set.add(parent_id)
-    # for parent_id in go[go_id]['regulates']:
-    #     if parent_id in go:
-    #         go_set.add(parent_id)
-    return go_set
-
-
-def get_go_sets(go, go_ids):
-    go_set = set()
-    q = deque()
-    for go_id in go_ids:
-        q.append(go_id)
-    while len(q) > 0:
-        g_id = q.popleft()
-        go_set.add(g_id)
-        for ch_id in go[g_id]['children']:
-            q.append(ch_id)
     return go_set
 
 
@@ -221,153 +143,137 @@ def get_go_set(go, go_id):
     return go_set
 
 
-def get_disjoint_sets(go, go_id):
-    sets = list()
-    gos = list(go[go_id]['children'])
-    for ch_id in gos:
-        go_set = get_go_set(go, ch_id)
-        sets.append(go_set)
-    a = list()
-    n = len(sets)
-    for i in range(n):
-        a.append([0] * n)
-    for i in range(len(sets)):
-        for j in range(i + 1, len(sets)):
-            if sets[i].intersection(sets[j]):
-                a[i][j] = 1
-                a[j][i] = 1
-    for i in range(n):
-        print a[i]
-    used = set()
+def save_model_weights(model, filepath):
+    if hasattr(model, 'flattened_layers'):
+        # Support for legacy Sequential/Merge behavior.
+        flattened_layers = model.flattened_layers
+    else:
+        flattened_layers = model.layers
 
-    def dfs(v):
-        used.add(v)
-        for i in range(n):
-            if a[v][i] == 1 and i not in used:
-                dfs(i)
-    c = 0
-    u = set()
-    for i in range(n):
-        if i not in used:
-            dfs(i)
-            group = list()
-            for x in used:
-                if x not in u:
-                    group.append(gos[x])
-                    u.add(x)
-            print '------------'
-            c += 1
-            print len(get_go_sets(go, group))
+    l_names = []
+    w_values = []
+    for layer in flattened_layers:
+        layer_name = layer.name
+        symbolic_weights = layer.weights
+        weight_values = K.batch_get_value(symbolic_weights)
+        if weight_values:
+            l_names.append(layer_name)
+            w_values.append(weight_values)
+    df = pd.DataFrame({
+        'layer_names': l_names,
+        'weight_values': w_values})
+    df.to_pickle(filepath)
 
 
-encoder = OneHotEncoder()
+def load_model_weights(model, filepath):
+    ''' Name-based weight loading
+    Layers that have no matching name are skipped.
+    '''
+    if hasattr(model, 'flattened_layers'):
+        # Support for legacy Sequential/Merge behavior.
+        flattened_layers = model.flattened_layers
+    else:
+        flattened_layers = model.layers
+
+    df = pd.read_pickle(filepath)
+
+    # Reverse index of layer name to list of layers with name.
+    index = {}
+    for layer in flattened_layers:
+        if layer.name:
+            index[layer.name] = layer
+
+    # We batch weight value assignments in a single backend call
+    # which provides a speedup in TensorFlow.
+    weight_value_tuples = []
+    for row in df.iterrows():
+        row = row[1]
+        name = row['layer_names']
+        weight_values = row['weight_values']
+        if name in index:
+            symbolic_weights = index[name].weights
+            if len(weight_values) != len(symbolic_weights):
+                raise Exception('Layer named "' + layer.name +
+                                '") expects ' + str(len(symbolic_weights)) +
+                                ' weight(s), but the saved weights' +
+                                ' have ' + str(len(weight_values)) +
+                                ' element(s).')
+            # Set values.
+            for i in range(len(weight_values)):
+                weight_value_tuples.append(
+                    (symbolic_weights[i], weight_values[i]))
+    K.batch_set_value(weight_value_tuples)
 
 
-def init_encoder():
-    data = np.arange(1, 21).reshape(20, 1)
-    encoder.fit(data)
-
-init_encoder()
-
-
-def encode_seq_one_hot(seq):
-    res = np.zeros((len(seq), 20), dtype='float32')
-    for i in range(len(seq)):
-        res[i, :] = encoder.transform([[seq[i]]]).toarray()
-    for i in range(len(seq)):
-        print seq[i], res[i]
-    return res
+def f_score(labels, preds):
+    preds = K.round(preds)
+    tp = K.sum(labels * preds)
+    fp = K.sum(preds) - tp
+    fn = K.sum(labels) - tp
+    p = tp / (tp + fp)
+    r = tp / (tp + fn)
+    return 2 * p * r / (p + r)
 
 
-def encode_sequences(sequences, maxlen=1000):
-    n = len(sequences)
-    data = np.zeros((n, maxlen, 20), dtype='float32')
-    for i in range(n):
-        m = len(sequences[i])
-        print m
-        data[i, :m, :] = encode_seq_one_hot(sequences[i])
-        break
-    return data
-
-
-def train_val_test_split(labels, data, split=0.8, batch_size=16):
-    """This function is used to split the labels and data
-    Input:
-        labels - array of labels
-        data - array of data
-        split - percentage of the split, default=0.8\
-    Return:
-        Three tuples with labels and data
-        (train_labels, train_data), (val_labels, val_data), (test_labels, test_data)
-    """
-    n = len(labels)
-    train_n = int((n * split) / batch_size) * batch_size
-    val_test_n = int((n - train_n) / 2)
-
-    train_data = data[:train_n]
-    train_labels = labels[:train_n]
-    train = (train_labels, train_data)
-
-    val_data = data[train_n:][0:val_test_n]
-    val_labels = labels[train_n:][0:val_test_n]
-    val = (val_labels, val_data)
-
-    test_data = data[train_n:][val_test_n:]
-    test_labels = labels[train_n:][val_test_n:]
-    test = (test_labels, test_data)
-
-    return (train, val, test)
-
-
-def train_test_split(labels, data, split=0.8, batch_size=16):
-    """This function is used to split the labels and data
-    Input:
-        labels - array of labels
-        data - array of data
-        split - percentage of the split, default=0.8\
-    Return:
-        Three tuples with labels and data
-        (train_labels, train_data), (test_labels, test_data)
-    """
-    n = len(labels)
-    train_n = int((n * split) / batch_size) * batch_size
-
-    train_data = data[:train_n]
-    train_labels = labels[:train_n]
-    train = (train_labels, train_data)
-
-    test_data = data[train_n:]
-    test_labels = labels[train_n:]
-    test = (test_labels, test_data)
-
-    return (train, test)
-
-
-def shuffle(*args, **kwargs):
-    """
-    Shuffle list of arrays with the same random state
-    """
-    seed = None
-    if 'seed' in kwargs:
-        seed = kwargs['seed']
-    rng_state = np.random.get_state()
-    for arg in args:
-        if seed is not None:
-            np.random.seed(seed)
+class MyCheckpoint(ModelCheckpoint):
+    def on_epoch_end(self, epoch, logs={}):
+        filepath = self.filepath.format(epoch=epoch, **logs)
+        current = logs.get(self.monitor)
+        if current is None:
+            warnings.warn('Can save best model only with %s available, '
+                          'skipping.' % (self.monitor), RuntimeWarning)
         else:
-            np.random.set_state(rng_state)
-        np.random.shuffle(arg)
+            if self.monitor_op(current, self.best):
+                if self.verbose > 0:
+                    print('Epoch %05d: %s improved from %0.5f to %0.5f,'
+                          ' saving model to %s'
+                          % (epoch, self.monitor, self.best,
+                             current, filepath))
+                self.best = current
+                save_model_weights(self.model, filepath)
+            else:
+                if self.verbose > 0:
+                    print('Epoch %05d: %s did not improve' %
+                          (epoch, self.monitor))
 
 
-# get_disjoint_sets(get_gene_ontology(), CELLULAR_COMPONENT)
+class DataGenerator(object):
 
-def get_statistics():
-    go = get_gene_ontology('goslim_yeast.obo')
-    print len(go)
-    bp = get_go_set(go, BIOLOGICAL_PROCESS)
-    mf = get_go_set(go, MOLECULAR_FUNCTION)
-    cc = get_go_set(go, CELLULAR_COMPONENT)
-    print len(bp), len(mf), len(cc)
+    def __init__(self, batch_size, num_outputs):
+        self.batch_size = batch_size
+        self.num_outputs = num_outputs
 
-# get_statistics()
-# get_ipro()
+    def fit(self, inputs, targets):
+        self.start = 0
+        self.inputs = inputs
+        self.targets = targets
+        self.size = len(self.inputs)
+        if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
+            self.size = len(self.inputs[0])
+
+    def __next__(self):
+        return self.next()
+
+    def reset(self):
+        self.start = 0
+
+    def next(self):
+        if self.start < self.size:
+            output = []
+            labels = self.targets
+            for i in range(self.num_outputs):
+                output.append(
+                    labels[self.start:(self.start + self.batch_size), i])
+            if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
+                res_inputs = []
+                for inp in self.inputs:
+                    res_inputs.append(
+                        inp[self.start:(self.start + self.batch_size)])
+            else:
+                res_inputs = self.inputs[self.start:(
+                    self.start + self.batch_size)]
+            self.start += self.batch_size
+            return (res_inputs, output)
+        else:
+            self.reset()
+            return self.next()

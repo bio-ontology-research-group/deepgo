@@ -14,33 +14,27 @@ from keras.layers import (
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
     Convolution1D, MaxPooling1D)
-from keras.layers.recurrent import LSTM
 from keras.optimizers import Adam, RMSprop, Adadelta
 from sklearn.metrics import classification_report
 from utils import (
-    shuffle,
     get_gene_ontology,
     get_go_set,
     get_anchestors,
     get_parents,
-    BIOLOGICAL_PROCESS,
-    MOLECULAR_FUNCTION,
-    CELLULAR_COMPONENT,
     DataGenerator,
-    FUNC_DICT)
-from keras.callbacks import ModelCheckpoint, EarlyStopping
+    FUNC_DICT,
+    MyCheckpoint,
+    save_model_weights,
+    load_model_weights)
+from keras.callbacks import EarlyStopping
 from keras.preprocessing import sequence
-from keras.utils.visualize_util import plot, model_to_dot
 from keras import backend as K
 import sys
-from aaindex import (
-    AAINDEX)
 from collections import deque
 import time
 import logging
 import tensorflow as tf
 from sklearn.metrics import roc_curve, auc
-import warnings
 from scipy.spatial import distance
 from multiprocessing import Pool
 
@@ -58,90 +52,6 @@ REPLEN = 256
 ind = 0
 
 
-def save_model_weights(model, filepath):
-    if hasattr(model, 'flattened_layers'):
-        # Support for legacy Sequential/Merge behavior.
-        flattened_layers = model.flattened_layers
-    else:
-        flattened_layers = model.layers
-
-    l_names = []
-    w_values = []
-    for layer in flattened_layers:
-        layer_name = layer.name
-        symbolic_weights = layer.weights
-        weight_values = K.batch_get_value(symbolic_weights)
-        if weight_values:
-            l_names.append(layer_name)
-            w_values.append(weight_values)
-    df = pd.DataFrame({
-        'layer_names': l_names,
-        'weight_values': w_values})
-    df.to_pickle(filepath)
-
-
-def load_model_weights(model, filepath):
-    ''' Name-based weight loading
-    Layers that have no matching name are skipped.
-    '''
-    if hasattr(model, 'flattened_layers'):
-        # Support for legacy Sequential/Merge behavior.
-        flattened_layers = model.flattened_layers
-    else:
-        flattened_layers = model.layers
-
-    df = pd.read_pickle(filepath)
-
-    # Reverse index of layer name to list of layers with name.
-    index = {}
-    for layer in flattened_layers:
-        if layer.name:
-            index[layer.name] = layer
-
-    # We batch weight value assignments in a single backend call
-    # which provides a speedup in TensorFlow.
-    weight_value_tuples = []
-    for row in df.iterrows():
-        row = row[1]
-        name = row['layer_names']
-        weight_values = row['weight_values']
-        if name in index:
-            symbolic_weights = index[name].weights
-            if len(weight_values) != len(symbolic_weights):
-                raise Exception('Layer named "' + layer.name +
-                                '") expects ' + str(len(symbolic_weights)) +
-                                ' weight(s), but the saved weights' +
-                                ' have ' + str(len(weight_values)) +
-                                ' element(s).')
-            # Set values.
-            for i in range(len(weight_values)):
-                weight_value_tuples.append(
-                    (symbolic_weights[i], weight_values[i]))
-    K.batch_set_value(weight_value_tuples)
-
-
-class MyCheckpoint(ModelCheckpoint):
-    def on_epoch_end(self, epoch, logs={}):
-        filepath = self.filepath.format(epoch=epoch, **logs)
-        current = logs.get(self.monitor)
-        if current is None:
-            warnings.warn('Can save best model only with %s available, '
-                          'skipping.' % (self.monitor), RuntimeWarning)
-        else:
-            if self.monitor_op(current, self.best):
-                if self.verbose > 0:
-                    print('Epoch %05d: %s improved from %0.5f to %0.5f,'
-                          ' saving model to %s'
-                          % (epoch, self.monitor, self.best,
-                             current, filepath))
-                self.best = current
-                save_model_weights(self.model, filepath)
-            else:
-                if self.verbose > 0:
-                    print('Epoch %05d: %s did not improve' %
-                          (epoch, self.monitor))
-
-
 @ck.command()
 @ck.option(
     '--function',
@@ -152,25 +62,19 @@ class MyCheckpoint(ModelCheckpoint):
     default='gpu:0',
     help='GPU or CPU device id')
 @ck.option(
-    '--org',
-    default='',
-    help='Organism name')
-@ck.option(
     '--threshold',
     default=0.5,
     help='Threshold for prediction')
-def main(function, device, org, threshold):
+def main(function, device, threshold):
     global FUNCTION
     FUNCTION = function
     global GO_ID
     GO_ID = FUNC_DICT[FUNCTION]
     global go
     go = get_gene_ontology('go.obo')
-    global ORG
-    ORG = org
     global THRESHOLD
     THRESHOLD = threshold
-    func_df = pd.read_pickle(DATA_ROOT + FUNCTION + ORG + '.pkl')
+    func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
     global functions
     functions = func_df['functions'].values
     global func_set
@@ -189,7 +93,7 @@ def main(function, device, org, threshold):
 
 
 def load_data(split=0.7):
-    df = pd.read_pickle(DATA_ROOT + 'data' + ORG + '-' + FUNCTION + '.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = np.arange(n)
     np.random.seed(5)
@@ -253,16 +157,6 @@ def get_feature_model():
     return model
 
 
-def f_score(labels, preds):
-    preds = K.round(preds)
-    tp = K.sum(labels * preds)
-    fp = K.sum(preds) - tp
-    fn = K.sum(labels) - tp
-    p = tp / (tp + fp)
-    r = tp / (tp + fn)
-    return 2 * p * r / (p + r)
-
-
 def merge_outputs(outputs, name):
     if len(outputs) == 1:
         return outputs[0]
@@ -322,8 +216,6 @@ def get_layers_recursive(inputs, node_output_dim=256):
             dfs(node_id, inputs)
 
     for node_id in functions:
-        #childs = [
-        #    n_id for n_id in go[node_id]['children'] if n_id in func_set]
         childs = get_go_set(go, node_id).intersection(func_set)
         if len(childs) == 0:
             if len(layers[node_id]['outputs']) == 1:
@@ -421,7 +313,7 @@ def model():
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_' + FUNCTION + ORG + '.json', 'w') as f:
+    with open(DATA_ROOT + 'model_' + FUNCTION + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     optimizer = RMSprop()
@@ -430,8 +322,8 @@ def model():
         optimizer=optimizer,
         loss='binary_crossentropy')
 
-    model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.pkl'
-    last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + ORG + '.last.pkl'
+    model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.pkl'
+    last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.pkl'
     checkpointer = MyCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True, save_weights_only=True)
