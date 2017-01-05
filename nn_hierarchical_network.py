@@ -219,7 +219,7 @@ def load_data(split=0.7):
     def get_values(data_frame):
         labels = reshape(data_frame['labels'].values)
         trigrams = sequence.pad_sequences(
-            data_frame['trigrams'].values, maxlen=MAXLEN)
+            data_frame['ngrams'].values, maxlen=MAXLEN)
         trigrams = reshape(trigrams)
         rep = reshape(data_frame['rep'].values)
         data = (trigrams, rep)
@@ -233,8 +233,8 @@ def load_data(split=0.7):
 
 
 def get_feature_model():
-    embedding_dims = 128
-    max_features = 8001
+    embedding_dims = 64
+    max_features = 2958621
     model = Sequential()
     model.add(Embedding(
         max_features,
@@ -362,7 +362,8 @@ def get_layers(inputs, node_output_dim=256):
                 parent_nets.append(layers[p_id]['net'])
         if len(parent_nets) > 1:
             name = get_node_name(node_id) + '_parents'
-            net = merge(parent_nets, mode='sum', name=name)
+            net = merge(
+                parent_nets, mode='sum', name=name)
         name = get_node_name(node_id)
         net, output = get_function_node(name, net, node_output_dim)
         if node_id not in layers:
@@ -377,8 +378,7 @@ def get_layers(inputs, node_output_dim=256):
                         q.append((n_id, net))
 
     for node_id in functions:
-        childs = [
-            n_id for n_id in go[node_id]['children'] if n_id in func_set]
+        childs = get_go_set(go, node_id).intersection(func_set)
         if len(childs) > 0:
             outputs = [layers[node_id]['output']]
             for ch_id in childs:
@@ -409,8 +409,10 @@ def model():
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
-    merged = merge([feature_model, inputs2], mode='concat', name='merged')
-    layers = get_layers_recursive(merged)
+    merged = merge(
+        [feature_model, inputs2], mode='concat',
+        concat_axis=1, name='merged')
+    layers = get_layers(merged)
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
@@ -442,7 +444,7 @@ def model():
     valid_generator = DataGenerator(batch_size, nb_classes)
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
-    test_generator.fit((test_data[0], test_data[1]), test_labels)
+    test_generator.fit(test_data, test_labels)
     model.fit_generator(
         train_generator,
         samples_per_epoch=len(train_data[0]),

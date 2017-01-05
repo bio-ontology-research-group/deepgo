@@ -49,12 +49,18 @@ for ind, go_id in enumerate(functions):
 
 
 def load_data():
+    df = pd.read_pickle(DATA_ROOT + 'ngrams.pkl')
+    vocab = {}
+    for key, gram in enumerate(df['ngrams']):
+        vocab[gram] = key
+    gram_len = len(df['ngrams'][0])
+    print('Gram length:', gram_len)
+    print('Vocabulary size:', len(vocab))
     proteins = list()
     sequences = list()
     gos = list()
     labels = list()
-    indexes = list()
-    trigrams = list()
+    ngrams = list()
     with open(DATA_ROOT + FILENAME, 'r') as f:
         for line in f:
             items = line.strip().split('\t')
@@ -68,25 +74,19 @@ def load_data():
             go_set.remove(GO_ID)
             gos.append(go_list)
             proteins.append(items[0])
-            sequences.append(items[1])
-            idx = [0] * len(items[1])
-            tri = [0] * (len(items[1]) - 2)
-            for i in range(len(idx)):
-                idx[i] = AAINDEX[items[1][i]] + 1
-            for i in xrange(len(tri)):
-                i1 = AAINDEX[items[1][i]]
-                i2 = AAINDEX[items[1][i + 1]]
-                i3 = AAINDEX[items[1][i + 2]]
-                tri[i] = i1 * 400 + i2 * 20 + i3 + 1
-            indexes.append(idx)
-            trigrams.append(tri)
+            seq = items[1]
+            sequences.append(seq)
+            grams = list()
+            for i in xrange(len(seq) - gram_len + 1):
+                grams.append(vocab[seq[i: (i + gram_len)]])
+            ngrams.append(grams)
             label = [0] * len(functions)
             for go_id in go_set:
                 if go_id in go_indexes:
                     label[go_indexes[go_id]] = 1
             labels.append(label)
 
-    return proteins, sequences, indexes, gos, labels, trigrams
+    return proteins, sequences, gos, labels, ngrams
 
 
 def load_rep():
@@ -134,14 +134,13 @@ def load_org_df():
 
 
 def run(*args, **kwargs):
-    proteins, sequences, indexes, gos, labels, trigrams = load_data()
+    proteins, sequences, gos, labels, ngrams = load_data()
     data = {
         'proteins': proteins,
         'sequences': sequences,
-        'indexes': indexes,
         'gos': gos,
         'labels': labels,
-        'trigrams': trigrams}
+        'ngrams': ngrams}
     rep = load_rep()
     text_reps = get_text_reps()
     rep_list = list()

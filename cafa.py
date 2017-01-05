@@ -156,8 +156,8 @@ def cafa2string():
 def main(*args, **kwargs):
     # get_data()
     # cafa3()
-    # fasta2tabs()
-    cafa2string()
+    fasta2tabs()
+    # cafa2string()
 
 
 if __name__ == '__main__':
