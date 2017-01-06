@@ -186,10 +186,12 @@ def get_node_name(go_id, unique=False):
 
 def get_function_node(name, inputs, output_dim):
     output_name = name + '_out'
-    merge_name = name + '_sum'
+    merge_name = name + '_con'
     net = Dense(output_dim, activation='relu', name=name)(inputs)
     output = Dense(1, activation='sigmoid', name=output_name)(net)
-    net = merge([net, inputs], mode='sum', name=merge_name)
+    net = merge(
+        [output, net], mode='concat',
+        concat_axis=1, name=merge_name)
     return net, output
 
 
@@ -255,7 +257,7 @@ def get_layers(inputs, node_output_dim=256):
         if len(parent_nets) > 1:
             name = get_node_name(node_id) + '_parents'
             net = merge(
-                parent_nets, mode='sum', name=name)
+                parent_nets, mode='concat', concat_axis=1, name=name)
         name = get_node_name(node_id)
         net, output = get_function_node(name, net, node_output_dim)
         if node_id not in layers:
