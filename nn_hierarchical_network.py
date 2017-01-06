@@ -368,9 +368,9 @@ def model():
                     preds[i, go_indexes[p_id]] = preds[i, j]
     # f, p, r = compute_similarity_performance(train_df, test_df, preds)
     # logging.info('F measure cosine: \t %f %f %f' % (f, p, r))
-    f, p, r, t = compute_performance(preds, test_labels, test_gos)
+    f, p, r = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
-    logging.info('F measure: \t %f %f %f %f' % (f, p, r, t))
+    logging.info('F measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('Inconsistent predictions: %d' % incon)
     logging.info('Done in %d sec' % (time.time() - start_time))
