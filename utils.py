@@ -1,5 +1,4 @@
 from collections import deque
-import string
 from keras import backend as K
 from keras.callbacks import ModelCheckpoint
 import warnings
@@ -13,6 +12,7 @@ FUNC_DICT = {
     'cc': CELLULAR_COMPONENT,
     'mf': MOLECULAR_FUNCTION,
     'bp': BIOLOGICAL_PROCESS}
+EXP_CODES = set(['EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'TAS', 'IC'])
 
 
 def get_ipro():

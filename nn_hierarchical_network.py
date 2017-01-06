@@ -47,7 +47,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/cafa3/'
-MAXLEN = 1000
+MAXLEN = 1500
 REPLEN = 256
 ind = 0
 
@@ -125,7 +125,7 @@ def load_data(split=0.7):
         trigrams = sequence.pad_sequences(
             data_frame['ngrams'].values, maxlen=MAXLEN)
         trigrams = reshape(trigrams)
-        rep = reshape(data_frame['rep'].values)
+        rep = reshape(data_frame['reps'].values)
         data = (trigrams, rep)
         return data, labels
 
