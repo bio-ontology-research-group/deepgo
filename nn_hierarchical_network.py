@@ -46,7 +46,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/cafa3/'
+DATA_ROOT = 'data/swissprot/'
 MAXLEN = 1500
 REPLEN = 256
 ind = 0

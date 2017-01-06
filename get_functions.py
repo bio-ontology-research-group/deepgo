@@ -10,7 +10,7 @@ from utils import (
 from collections import deque
 
 
-DATA_ROOT = 'data/cafa3/'
+DATA_ROOT = 'data/swissprot/'
 ANNOT_NUM = 50
 FUNCTION = 'cc'
 
@@ -47,8 +47,8 @@ def get_functions():
         go_set = set()
         for go_id in row['annots']:
             go_id = go_id.split('|')
-            if go_id[1] not in EXP_CODES:
-                continue
+            # if go_id[1] not in EXP_CODES:
+            #     continue
             go_id = go_id[0]
             if go_id in func_set:
                 go_set |= get_anchestors(go, go_id)
