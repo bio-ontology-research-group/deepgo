@@ -271,15 +271,15 @@ def get_layers(inputs, node_output_dim=256):
                     if ok:
                         q.append((n_id, net))
 
-    for node_id in functions:
-        childs = get_go_set(go, node_id).intersection(func_set)
-        if len(childs) > 0:
-            outputs = [layers[node_id]['output']]
-            for ch_id in childs:
-                outputs.append(layers[ch_id]['output'])
-            name = get_node_name(node_id) + '_max'
-            layers[node_id]['output'] = merge(
-                outputs, mode='max', name=name)
+    # for node_id in functions:
+    #     childs = get_go_set(go, node_id).intersection(func_set)
+    #     if len(childs) > 0:
+    #         outputs = [layers[node_id]['output']]
+    #         for ch_id in childs:
+    #             outputs.append(layers[ch_id]['output'])
+    #         name = get_node_name(node_id) + '_max'
+    #         layers[node_id]['output'] = merge(
+    #             outputs, mode='max', name=name)
     return layers
 
 

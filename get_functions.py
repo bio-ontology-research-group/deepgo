@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-import sys
-import numpy as np
 import pandas as pd
+import click as ck
 from utils import (
     get_gene_ontology,
     get_anchestors,
@@ -11,14 +10,39 @@ from collections import deque
 
 
 DATA_ROOT = 'data/swissprot/'
-ANNOT_NUM = 50
-FUNCTION = 'cc'
 
-GO_ID = FUNC_DICT[FUNCTION]
 
-go = get_gene_ontology('go.obo')
+@ck.command()
+@ck.option(
+    '--function',
+    default='mf',
+    help='Function (mf, bp, cc)')
+@ck.option(
+    '--annot-num',
+    default=50,
+    help='Limit of annotations number for selecting function')
+def main(function, annot_num):
+    global FUNCTION
+    FUNCTION = function
+    global GO_ID
+    GO_ID = FUNC_DICT[FUNCTION]
+    global go
+    go = get_gene_ontology('go.obo')
+    global functions
+    functions = deque()
+    dfs(GO_ID)
+    functions.remove(GO_ID)
+    functions.reverse()
+    functions = list(functions)
+    print(len(functions))
+    global func_set
+    func_set = set(functions)
+    global go_indexes
+    go_indexes = dict()
+    for ind, go_id in enumerate(functions):
+        go_indexes[go_id] = ind
 
-functions = deque()
+    get_functions(annot_num)
 
 
 # Add functions to deque in topological order
@@ -29,19 +53,8 @@ def dfs(go_id):
         functions.append(go_id)
 
 
-dfs(GO_ID)
-functions.remove(GO_ID)
-functions.reverse()
-functions = list(functions)
-print(len(functions))
-func_set = set(functions)
-go_indexes = dict()
-for ind, go_id in enumerate(functions):
-    go_indexes[go_id] = ind
-
-
-def get_functions():
-    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
+def get_functions(annot_num):
+    df = pd.read_pickle(DATA_ROOT + 'swissprot.pkl')
     annots = dict()
     for i, row in df.iterrows():
         go_set = set()
@@ -58,7 +71,7 @@ def get_functions():
             annots[go_id] += 1
     filtered = list()
     for go_id in functions:
-        if go_id in annots and annots[go_id] >= ANNOT_NUM:
+        if go_id in annots and annots[go_id] >= annot_num:
             filtered.append(go_id)
     print len(filtered)
     df = pd.DataFrame({'functions': filtered})
@@ -66,9 +79,5 @@ def get_functions():
     print 'Saved ' + DATA_ROOT + FUNCTION + '.pkl'
 
 
-def main(*args, **kwargs):
-    get_functions()
-
-
 if __name__ == '__main__':
-    main(*sys.argv)
+    main()
