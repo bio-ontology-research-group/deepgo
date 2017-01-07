@@ -302,16 +302,16 @@ def model():
     logging.info("Test data size: %d" % len(test_data[0]))
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
+    # inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model()(inputs)
-    merged = merge(
-        [feature_model, inputs2], mode='concat',
-        concat_axis=1, name='merged')
-    layers = get_layers(merged)
+    # merged = merge(
+    #     [feature_model, inputs2], mode='concat',
+    #     concat_axis=1, name='merged')
+    layers = get_layers(feature_model)
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
-    model = Model(input=[inputs, inputs2], output=output_models)
+    model = Model(input=inputs, output=output_models)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
@@ -335,11 +335,11 @@ def model():
     logging.info('Starting training the model')
 
     train_generator = DataGenerator(batch_size, nb_classes)
-    train_generator.fit(train_data, train_labels)
+    train_generator.fit(train_data[0], train_labels)
     valid_generator = DataGenerator(batch_size, nb_classes)
-    valid_generator.fit(val_data, val_labels)
+    valid_generator.fit(val_data[0], val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
-    test_generator.fit(test_data, test_labels)
+    test_generator.fit(test_data[0], test_labels)
     model.fit_generator(
         train_generator,
         samples_per_epoch=len(train_data[0]),
