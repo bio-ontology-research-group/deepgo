@@ -6,7 +6,7 @@ AAINDEX = dict()
 for i in range(len(AALETTER)):
     AAINDEX[AALETTER[i]] = i
 INVALID_ACIDS = set(['U', 'O', 'B', 'Z', 'J', 'X', '*'])
-MAXLEN = 1502
+MAXLEN = 1002
 
 
 def is_ok(seq):

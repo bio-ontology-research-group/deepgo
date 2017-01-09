@@ -47,7 +47,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/cafa3/'
-MAXLEN = 1500
+MAXLEN = 1000
 REPLEN = 256
 ind = 0
 
