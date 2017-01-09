@@ -11,7 +11,7 @@ from utils import (
 from aaindex import is_ok
 import click as ck
 
-DATA_ROOT = 'data/swissprot/'
+DATA_ROOT = 'data/cafa3/'
 
 
 @ck.command()
@@ -51,7 +51,7 @@ def load_data():
     gos = list()
     labels = list()
     ngrams = list()
-    df = pd.read_pickle(DATA_ROOT + 'swissprot.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
     # Filtering data by sequences
     index = list()
     for i, row in df.iterrows():
@@ -63,9 +63,9 @@ def load_data():
         go_list = []
         for item in row['annots']:
             items = item.split('|')
-            # if items[1] in EXP_CODES:
-            #     go_list.append(items[0])
-            go_list.append(items[0])
+            if items[1] in EXP_CODES:
+                go_list.append(items[0])
+            # go_list.append(items[0])
         go_set = set()
         for go_id in go_list:
             if go_id in func_set:

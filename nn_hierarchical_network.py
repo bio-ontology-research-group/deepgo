@@ -96,7 +96,7 @@ def load_data(split=0.95):
     df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = np.arange(n)
-    np.random.seed(5)
+    np.random.seed(55)
     np.random.shuffle(index)
     train_n = int(n * split)
     # valid_n = int(train_n * 0.8)
@@ -242,8 +242,6 @@ def get_layers(inputs, node_output_dim=256):
     q = deque()
     layers = {}
     name = get_node_name(GO_ID)
-    inputs = Dense(
-        node_output_dim, activation='relu', name=name)(inputs)
     layers[GO_ID] = {'net': inputs}
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
