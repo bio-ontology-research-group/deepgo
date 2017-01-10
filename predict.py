@@ -104,15 +104,16 @@ def model(model_name):
     logging.info("Loading Data")
     data, targets = load_data()
     data_generator = DataGenerator(batch_size, nb_classes)
-    data_generator.fit(data[0], data[1])
+    data_generator.fit(data, None)
 
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Data size: %d" % len(data[0]))
     logging.info('Loading the model')
-    optimizer = RMSprop()
     with open(model_name + '.json', 'r') as f:
         json_string = next(f)
     model = model_from_json(json_string)
+
+    optimizer = RMSprop()
     model.compile(
         optimizer=optimizer,
         loss='binary_crossentropy')
