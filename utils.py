@@ -250,6 +250,7 @@ class DataGenerator(object):
         self.size = len(self.inputs)
         if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
             self.size = len(self.inputs[0])
+        self.has_targets = targets is not None
 
     def __next__(self):
         return self.next()
@@ -260,7 +261,7 @@ class DataGenerator(object):
     def next(self):
         if self.start < self.size:
             output = []
-            if self.targets:
+            if self.has_targets:
                 labels = self.targets
                 for i in range(self.num_outputs):
                     output.append(
@@ -274,7 +275,7 @@ class DataGenerator(object):
                 res_inputs = self.inputs[self.start:(
                     self.start + self.batch_size)]
             self.start += self.batch_size
-            if self.targets:
+            if self.has_targets:
                 return (res_inputs, output)
             return res_inputs
         else:
