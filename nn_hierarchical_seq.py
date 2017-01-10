@@ -321,7 +321,7 @@ def model():
         loss='binary_crossentropy')
 
     model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
-    last_model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
+    last_model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.last.pkl'
     checkpointer = MyCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True, save_weights_only=True)

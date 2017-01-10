@@ -243,7 +243,7 @@ class DataGenerator(object):
         self.batch_size = batch_size
         self.num_outputs = num_outputs
 
-    def fit(self, inputs, targets):
+    def fit(self, inputs, targets=None):
         self.start = 0
         self.inputs = inputs
         self.targets = targets
@@ -260,10 +260,11 @@ class DataGenerator(object):
     def next(self):
         if self.start < self.size:
             output = []
-            labels = self.targets
-            for i in range(self.num_outputs):
-                output.append(
-                    labels[self.start:(self.start + self.batch_size), i])
+            if self.targets:
+                labels = self.targets
+                for i in range(self.num_outputs):
+                    output.append(
+                        labels[self.start:(self.start + self.batch_size), i])
             if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
                 res_inputs = []
                 for inp in self.inputs:
@@ -273,7 +274,9 @@ class DataGenerator(object):
                 res_inputs = self.inputs[self.start:(
                     self.start + self.batch_size)]
             self.start += self.batch_size
-            return (res_inputs, output)
+            if self.targets:
+                return (res_inputs, output)
+            return res_inputs
         else:
             self.reset()
             return self.next()

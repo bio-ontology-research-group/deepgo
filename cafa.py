@@ -3,22 +3,32 @@ import sys
 import os
 import numpy as np
 import pandas as pd
-from aaindex import INVALID_ACIDS
+from aaindex import is_ok
 
 MAXLEN = 1000
 
 
-def is_ok(seq):
-    if len(seq) > MAXLEN:
-        return False
-    for c in seq:
-        if c in INVALID_ACIDS:
-            return False
-    return True
+def get_fly_mapping():
+    map1 = dict()
+    with open('data/fly_uni.dat') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            map1[it[0]] = it[1]
+    res = dict()
+    with open('data/fly_idmapping.dat') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            if it[0] in map1:
+                res[it[1]] = map1[it[0]]
+    return res
 
 
 def read_fasta(filename):
     data = list()
+    org = os.path.basename(filename).split('.')[1]
+    if org == '7227':
+        mapping = get_fly_mapping()
+    c = 0
     with open(filename, 'r') as f:
         seq = ''
         for line in f:
@@ -26,11 +36,20 @@ def read_fasta(filename):
             if line.startswith('>'):
                 if seq != '':
                     data.append(seq)
-                line = line[1:].split()[0]
+                line = line[1:].split()
+                if org == '7227':
+                    if line[1] in mapping:
+                        line = org + '\t' + line[0] + '\t' + mapping[line[1]]
+                    else:
+                        line = org + '\t' + line[0] + '\t' + line[1]
+                        c += 1
+                else:
+                    line = org + '\t' + line[0] + '\t' + line[1]
                 seq = line + '\t'
             else:
                 seq += line
         data.append(seq)
+    print(c)
     return data
 
 
@@ -112,35 +131,38 @@ def cafa3():
 
 
 def get_data():
-    # targets = set()
-    # with open('data/cafa2/targets.txt', 'r') as f:
-    #     for line in f:
-    #         items = line.strip().split()
-    #         targets.add(items[1])
-    seqs = dict()
-    with open('data/cafa3/targets.txt', 'r') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            if is_ok(items[1]):
-                prot_id = items[0]
-                seqs[prot_id] = items[1]
-    # print len(seqs)
-    annots = dict()
-    with open('data/cafa3/uniprot-go.tab', 'r') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            if items[1] in seqs:
-                annots[items[1]] = items[2]
+    proteins = list()
+    targets = list()
+    orgs = list()
+    ngrams = list()
+    ngram_df = pd.read_pickle('data/cafa3/ngrams.pkl')
+    vocab = {}
+    for key, gram in enumerate(ngram_df['ngrams']):
+        vocab[gram] = key + 1
+    gram_len = len(ngram_df['ngrams'][0])
+    print('Gram length:', gram_len)
+    print('Vocabulary size:', len(vocab))
 
-    # np.random.shuffle(data)
-    fl = open('data/cafa3/data.txt', 'w')
-    for prot_id in seqs:
-        if prot_id in annots:
-            fl.write(prot_id + '\t' + seqs[prot_id] + '\t' + annots[prot_id])
-            fl.write('\n')
-        else:
-            print(prot_id)
-    fl.close()
+    with open('data/cafa3/targets.txt') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            seq = it[3]
+            if is_ok(seq):
+                orgs.append(it[0])
+                targets.append(it[1])
+                proteins.append(it[2])
+                grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
+                for i in xrange(len(seq) - gram_len + 1):
+                    grams[i] = vocab[seq[i: (i + gram_len)]]
+                ngrams.append(grams)
+
+    df = pd.DataFrame({
+        'targets': targets,
+        'proteins': proteins,
+        'ngrams': ngrams,
+        'orgs': orgs})
+    print(len(df))
+    df.to_pickle('data/cafa3/targets.pkl')
 
 
 def cafa2string():
@@ -159,12 +181,12 @@ def cafa2string():
 
 
 def main(*args, **kwargs):
-    # get_data()
+    get_data()
     # cafa3()
     # fasta2tabs()
     # cafa2string()
     # get_annotations()
-    sprot2tabs()
+    # sprot2tabs()
 
 
 if __name__ == '__main__':

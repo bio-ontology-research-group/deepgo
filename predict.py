@@ -1,110 +1,155 @@
-from __future__ import print_function
-import sys
+#!/usr/bin/env python
+
+"""
+python predict.py
+"""
+
 import numpy as np
 import pandas as pd
-from keras.models import Model, model_from_json
-from keras.preprocessing import sequence
-from aaindex import AAINDEX
+import click as ck
+from keras.models import model_from_json
+from keras.optimizers import RMSprop
 from utils import (
     get_gene_ontology,
-    get_anchestors)
+    get_go_set,
+    get_anchestors,
+    get_parents,
+    DataGenerator,
+    FUNC_DICT,
+    MyCheckpoint,
+    save_model_weights,
+    load_model_weights)
+from keras.preprocessing import sequence
+from keras import backend as K
+import sys
+import time
+import logging
+import tensorflow as tf
 
-go = get_gene_ontology('go.obo')
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+K.set_session(sess)
 
-models = list()
-ontos = ['cc', 'mf', 'bp']
-DATA_ROOT = 'data/swiss/'
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+sys.setrecursionlimit(100000)
+
+DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
-ORG = '-rat'
+REPLEN = 256
+ind = 0
 
 
-def get_data(sequences):
-    n = len(sequences)
-    data = np.zeros((n, MAXLEN), dtype='float32')
-    for i in range(n):
-        for j in range(len(sequences[i])):
-            data[i, j] = AAINDEX[sequences[i][j]]
-    return data
+@ck.command()
+@ck.option(
+    '--function',
+    default='mf',
+    help='Ontology id (mf, bp, cc)')
+@ck.option(
+    '--device',
+    default='gpu:0',
+    help='GPU or CPU device id')
+@ck.option(
+    '--model-name',
+    default='model',
+    help='Name of the model')
+def main(function, device, model_name):
+    global FUNCTION
+    FUNCTION = function
+    global GO_ID
+    GO_ID = FUNC_DICT[FUNCTION]
+    global go
+    go = get_gene_ontology('go.obo')
+    func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
+    global functions
+    functions = func_df['functions'].values
+    global func_set
+    func_set = set(functions)
+    global all_functions
+    all_functions = get_go_set(go, GO_ID)
+    logging.info(len(functions))
+    global go_indexes
+    go_indexes = dict()
+    for ind, go_id in enumerate(functions):
+        go_indexes[go_id] = ind
+    with tf.device('/' + device):
+        model()
 
 
-def predict(data, model, functions):
-    batch_size = 1
-    n = data.shape[0]
-    result = list()
-    for i in range(n):
-        result.append(list())
-    predictions = model.predict(
-        data, batch_size=batch_size)
-    for i in range(len(functions)):
-        rpred = predictions[i].flatten()
-        pred = np.round(rpred)
-        for j in range(n):
-            if pred[j] == 1:
-                result[j].append(functions[i])
-    return result
+def load_data():
+    df = pd.read_pickle(DATA_ROOT + 'targets.pkl')
+
+    def reshape(values):
+        values = np.hstack(values).reshape(
+            len(values), len(values[0]))
+        return values
+
+    def get_values(data_frame):
+        ngrams = sequence.pad_sequences(
+            data_frame['ngrams'].values, maxlen=MAXLEN)
+        ngrams = reshape(ngrams)
+        # rep = reshape(data_frame['reps'].values)
+        return ngrams
+
+    data = get_values(df)
+
+    return data, df['targets'].values
 
 
-def init_models(org='', **kwargs):
-    global models
-    for func in ontos:
-        with open(DATA_ROOT + 'model_' + func + org + '.json', 'r') as f:
-            json_string = next(f)
-        model = model_from_json(json_string)
-        model.compile(
-            optimizer='rmsprop',
-            loss='binary_crossentropy',
-            metrics=['accuracy'])
-        model.load_weights(DATA_ROOT + 'hierarchical_' + func + org + '.hdf5')
-        df = pd.read_pickle(DATA_ROOT + func + org + '.pkl')
-        functions = df['functions']
-        models.append((model, functions))
+def model(model_name):
+    # set parameters:
+    batch_size = 128
+    nb_classes = len(functions)
+    start_time = time.time()
+    logging.info("Loading Data")
+    data, targets = load_data()
+    data_generator = DataGenerator(batch_size, nb_classes)
+    data_generator.fit(data[0], data[1])
 
+    logging.info("Data loaded in %d sec" % (time.time() - start_time))
+    logging.info("Data size: %d" % len(data[0]))
+    logging.info('Loading the model')
+    optimizer = RMSprop()
+    with open(model_name + '.json', 'r') as f:
+        json_string = next(f)
+    model = model_from_json(json_string)
+    model.compile(
+        optimizer=optimizer,
+        loss='binary_crossentropy')
 
-def predict_functions(sequences):
-    if not models:
-        init_models(org=ORG)
-    data = get_data(sequences)
-    result = list()
-    for i in range(len(models)):
-        model, functions = models[i]
-        print('Running predictions for model %s %s' % (ontos[i], ORG))
-        result += predict(data, model, functions)
-    return result
+    model_path = DATA_ROOT + model_name + '_weights_' + FUNCTION + '.pkl'
+    logging.info(
+        'Compilation finished in %d sec' % (time.time() - start_time))
+    logging.info('Loading weights')
+    load_model_weights(model, model_path)
 
+    preds = model.predict_generator(
+        data_generator, val_samples=len(data))
+    for i in xrange(len(preds)):
+        preds[i] = preds[i].reshape(-1, 1)
+    preds = np.concatenate(preds, axis=1)
 
-def filter_specific(gos):
-    go_set = set()
-    for go_id in gos:
-        go_set.add(go_id)
-    for go_id in gos:
-        anchestors = get_anchestors(go, go_id)
-        anchestors.discard(go_id)
-        go_set -= anchestors
-    return list(go_set)
+    incon = 0
+    for i in xrange(len(data)):
+        for j in xrange(len(functions)):
+            anchestors = get_anchestors(go, functions[j])
+            for p_id in anchestors:
+                if (p_id not in [GO_ID, functions[j]] and
+                        preds[i, go_indexes[p_id]] < preds[i, j]):
+                    incon += 1
+                    preds[i, go_indexes[p_id]] = preds[i, j]
+    logging.info('Inconsistent predictions: %d' % incon)
 
-
-def main(*args, **kwargs):
-    prots = list()
-    sequences = list()
-    with open(DATA_ROOT + 'test' + ORG + '.txt', 'r') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            prots.append(items[0])
-            sequences.append(items[1])
-    preds = predict_functions(sequences)
-    n = len(prots)
-    cc = preds[0: n]
-    mf = preds[n: n + n]
-    bp = preds[2 * n: 3 * n]
-
-    with open(DATA_ROOT + 'test' + ORG + '-preds.txt', 'w') as f:
-        for i in xrange(n):
-            funcs = filter_specific(cc[i] + mf[i] + bp[i])
-            f.write(prots[i])
-            for func in funcs:
-                f.write('\t' + func)
-            f.write('\n')
+    predictions = list()
+    for i in xrange(len(targets)):
+        predictions.append(preds[i])
+    df = pd.DataFrame({
+        'targets': targets,
+        'predictions': predictions})
+    print(len(df))
+    df.to_pickle(DATA_ROOT + model_name + '_preds_' + FUNCTION + '.pkl')
+    logging.info('Done in %d sec' % (time.time() - start_time))
 
 
 if __name__ == '__main__':
-    main(*sys.argv)
+    main()
