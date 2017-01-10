@@ -243,7 +243,7 @@ class DataGenerator(object):
         self.batch_size = batch_size
         self.num_outputs = num_outputs
 
-    def fit(self, inputs, targets=None):
+    def fit(self, inputs, targets):
         self.start = 0
         self.inputs = inputs
         self.targets = targets
