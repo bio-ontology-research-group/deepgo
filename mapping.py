@@ -2,6 +2,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
 import pandas as pd
+import numpy as np
 
 
 def to_pickle():
@@ -54,8 +55,44 @@ def filter_exp():
     df.to_pickle('data/cafa3/swissprot_exp.pkl')
 
 
+def string_uni():
+    mapping = dict()
+    with open('data/string2uni.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            mapping[it[0].upper()] = it[1]
+
+    with open('data/string_idmapping.dat') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            mapping[it[2].upper()] = it[0]
+
+    with open('data/uniprot-string.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            mapping[it[1].upper()[:-1]] = it[0]
+
+    embeds = list()
+    accessions = list()
+
+    with open('data/graph_reps.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            st_id = it[0].upper()
+            if st_id in mapping:
+                accessions.append(mapping[st_id])
+                rep = np.array(map(float, it[1:]), dtype='float32')
+                embeds.append(rep)
+    df = pd.DataFrame({
+        'accessions': accessions,
+        'embeddings': embeds})
+    print(len(df))
+    df.to_pickle('data/graph_embeddings.pkl')
+
+
 def main():
-    filter_exp()
+    string_uni()
+
 
 if __name__ == '__main__':
     main()

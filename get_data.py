@@ -97,14 +97,9 @@ def load_data():
 def load_rep_df():
     proteins = list()
     reps = list()
-    with open('data/uni_reps.tab', 'r') as f:
-        for line in f:
-            it = line.strip().split('\t')
-            prot_id = it[0]
-            rep = np.array(map(float, it[1:]))
-            proteins.append(prot_id)
-            reps.append(rep)
-    return pd.DataFrame({'proteins': proteins, 'reps': reps})
+    df = pd.read_pickle('data/graph_embeddings.pkl')
+    df = df.rename(index=str, columns={"accessions": "proteins"})
+    return df
 
 
 def load_org_df():
@@ -129,8 +124,8 @@ def run(*args, **kwargs):
     df = pd.merge(df, rep_df, on='proteins', how='left')
     missing_rep = 0
     for i, row in df.iterrows():
-        if not isinstance(row['reps'], np.ndarray):
-            row['reps'] = np.zeros((256,), dtype='float32')
+        if not isinstance(row['embeddings'], np.ndarray):
+            row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
     print(len(df) - missing_rep)
     df.to_pickle(DATA_ROOT + 'data-' + FUNCTION + '.pkl')

@@ -46,7 +46,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swissprot/'
+DATA_ROOT = 'data/cafa3/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -311,7 +311,7 @@ def model():
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
-    with open(DATA_ROOT + 'model_' + FUNCTION + '.json', 'w') as f:
+    with open(DATA_ROOT + 'model_seq_' + FUNCTION + '.json', 'w') as f:
         f.write(model_json)
     logging.info('Compiling the model')
     optimizer = RMSprop()
@@ -320,8 +320,8 @@ def model():
         optimizer=optimizer,
         loss='binary_crossentropy')
 
-    model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.pkl'
-    last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.pkl'
+    model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
+    last_model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
     checkpointer = MyCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True, save_weights_only=True)
