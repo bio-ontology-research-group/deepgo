@@ -113,27 +113,18 @@ def load_data(split=0.95):
             len(values), len(values[0]))
         return values
 
-    def normalize_minmax(values):
-        mn = np.min(values)
-        mx = np.max(values)
-        if mx - mn != 0.0:
-            return (values - mn) / (mx - mn)
-        return values - mn
-
     def get_values(data_frame):
         labels = reshape(data_frame['labels'].values)
-        trigrams = sequence.pad_sequences(
+        ngrams = sequence.pad_sequences(
             data_frame['ngrams'].values, maxlen=MAXLEN)
-        trigrams = reshape(trigrams)
-        rep = reshape(data_frame['reps'].values)
-        data = (trigrams, rep)
-        return data, labels
+        ngrams = reshape(ngrams)
+        return ngrams, labels
 
     train = get_values(train_df)
     valid = get_values(valid_df)
     test = get_values(test_df)
 
-    return train, valid, test, train_df, valid_df, test_df
+    return train, valid, test, test_df
 
 
 def get_feature_model():
@@ -288,16 +279,15 @@ def model():
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
-    train, val, test, train_df, valid_df, test_df = load_data()
-    train_df = pd.concat([train_df, valid_df])
+    train, val, test, test_df = load_data()
     test_gos = test_df['gos'].values
     train_data, train_labels = train
     val_data, val_labels = val
     test_data, test_labels = test
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
-    logging.info("Training data size: %d" % len(train_data[0]))
-    logging.info("Validation data size: %d" % len(val_data[0]))
-    logging.info("Test data size: %d" % len(test_data[0]))
+    logging.info("Training data size: %d" % len(train_data))
+    logging.info("Validation data size: %d" % len(val_data))
+    logging.info("Test data size: %d" % len(test_data))
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     feature_model = get_feature_model()(inputs)
@@ -329,17 +319,17 @@ def model():
     logging.info('Starting training the model')
 
     train_generator = DataGenerator(batch_size, nb_classes)
-    train_generator.fit(train_data[0], train_labels)
+    train_generator.fit(train_data, train_labels)
     valid_generator = DataGenerator(batch_size, nb_classes)
-    valid_generator.fit(val_data[0], val_labels)
+    valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
-    test_generator.fit(test_data[0], test_labels)
+    test_generator.fit(test_data, test_labels)
     model.fit_generator(
         train_generator,
-        samples_per_epoch=len(train_data[0]),
+        samples_per_epoch=len(train_data),
         nb_epoch=nb_epoch,
         validation_data=valid_generator,
-        nb_val_samples=len(val_data[0]),
+        nb_val_samples=len(val_data),
         max_q_size=batch_size,
         callbacks=[checkpointer, earlystopper])
     save_model_weights(model, last_model_path)
@@ -348,13 +338,13 @@ def model():
     load_model_weights(model, model_path)
 
     preds = model.predict_generator(
-        test_generator, val_samples=len(test_data[0]))
+        test_generator, val_samples=len(test_data))
     for i in xrange(len(preds)):
         preds[i] = preds[i].reshape(-1, 1)
     preds = np.concatenate(preds, axis=1)
 
     incon = 0
-    for i in xrange(len(test_data[0])):
+    for i in xrange(len(test_data)):
         for j in xrange(len(functions)):
             anchestors = get_anchestors(go, functions[j])
             for p_id in anchestors:
@@ -362,8 +352,6 @@ def model():
                         preds[i, go_indexes[p_id]] < preds[i, j]):
                     incon += 1
                     preds[i, go_indexes[p_id]] = preds[i, j]
-    # f, p, r = compute_similarity_performance(train_df, test_df, preds)
-    # logging.info('F measure cosine: \t %f %f %f' % (f, p, r))
     f, p, r = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
     logging.info('F measure: \t %f %f %f' % (f, p, r))
@@ -402,62 +390,6 @@ def compute_performance(preds, labels, gos):
     r /= total
     p /= total
     return f, p, r
-
-
-def get_gos(pred):
-    mdist = 1.0
-    mgos = None
-    for i in xrange(len(labels_gos)):
-        labels, gos = labels_gos[i]
-        dist = distance.cosine(pred, labels)
-        if mdist > dist:
-            mdist = dist
-            mgos = gos
-    return mgos
-
-
-def compute_similarity_performance(train_df, test_df, preds):
-    logging.info("Computing similarity performance")
-    logging.info("Training data size %d" % len(train_df))
-    train_labels = train_df['labels'].values
-    train_gos = train_df['gos'].values
-    global labels_gos
-    labels_gos = zip(train_labels, train_gos)
-    p = Pool(64)
-    pred_gos = p.map(get_gos, preds)
-    total = 0
-    p = 0.0
-    r = 0.0
-    f = 0.0
-    test_gos = test_df['gos'].values
-    for gos, tgos in zip(pred_gos, test_gos):
-        preds = set()
-        test = set()
-        for go_id in gos:
-            if go_id in all_functions:
-                preds |= get_anchestors(go, go_id)
-        for go_id in tgos:
-            if go_id in all_functions:
-                test |= get_anchestors(go, go_id)
-        tp = len(preds.intersection(test))
-        fp = len(preds - test)
-        fn = len(test - preds)
-        if tp == 0 and fp == 0 and fn == 0:
-            continue
-        total += 1
-        if tp != 0:
-            precision = tp / (1.0 * (tp + fp))
-            recall = tp / (1.0 * (tp + fn))
-            p += precision
-            r += recall
-            f += 2 * precision * recall / (precision + recall)
-    return f / total, p / total, r / total
-
-
-def print_report(report, go_id):
-    with open(DATA_ROOT + 'reports.txt', 'a') as f:
-        f.write('Classification report for ' + go_id + '\n')
-        f.write(report + '\n')
 
 
 if __name__ == '__main__':
