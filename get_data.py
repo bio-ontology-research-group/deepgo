@@ -97,7 +97,7 @@ def load_data():
 def load_rep_df():
     proteins = list()
     reps = list()
-    df = pd.read_pickle('data/graph_embeddings.pkl')
+    df = pd.read_pickle('data/graph_accessions.pkl')
     df = df.rename(index=str, columns={"accessions": "proteins"})
     return df
 
@@ -121,14 +121,15 @@ def run(*args, **kwargs):
     org_df = load_org_df()
     rep_df = load_rep_df()
     df = pd.merge(df, org_df, on='proteins', how='left')
-    df = pd.merge(df, rep_df, on='proteins', how='left')
+    df = pd.merge(df, rep_df, on='proteins', how='inner')
+    print(len(df))
     missing_rep = 0
-    for i, row in df.iterrows():
-        if not isinstance(row['embeddings'], np.ndarray):
-            row['embeddings'] = np.zeros((256,), dtype='float32')
-            missing_rep += 1
-    print(len(df) - missing_rep)
-    df.to_pickle(DATA_ROOT + 'data-' + FUNCTION + '.pkl')
+    # for i, row in df.iterrows():
+    #     if not isinstance(row['embeddings'], np.ndarray):
+    #         row['embeddings'] = np.zeros((256,), dtype='float32')
+    #         missing_rep += 1
+    # print(len(df) - missing_rep)
+    # df.to_pickle(DATA_ROOT + 'data-' + FUNCTION + '.pkl')
 
 
 if __name__ == '__main__':

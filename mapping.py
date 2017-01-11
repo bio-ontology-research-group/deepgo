@@ -74,20 +74,24 @@ def string_uni():
 
     embeds = list()
     accessions = list()
-
-    with open('data/graph_reps.tab') as f:
+    with open('data/graph.mapping.out') as f:
         for line in f:
             it = line.strip().split('\t')
             st_id = it[0].upper()
             if st_id in mapping:
                 accessions.append(mapping[st_id])
-                rep = np.array(map(float, it[1:]), dtype='float32')
-                embeds.append(rep)
+    # with open('data/graph_reps.tab') as f:
+    #     for line in f:
+    #         it = line.strip().split('\t')
+    #         st_id = it[0].upper()
+    #         if st_id in mapping:
+    #             accessions.append(mapping[st_id])
+    #             rep = np.array(map(float, it[1:]), dtype='float32')
+    #             embeds.append(rep)
     df = pd.DataFrame({
-        'accessions': accessions,
-        'embeddings': embeds})
+        'accessions': accessions})
     print(len(df))
-    df.to_pickle('data/graph_embeddings.pkl')
+    df.to_pickle('data/graph_accessions.pkl')
 
 
 def main():
