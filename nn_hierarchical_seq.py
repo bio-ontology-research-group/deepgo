@@ -242,6 +242,8 @@ def get_layers(inputs, node_output_dim=256):
     q = deque()
     layers = {}
     name = get_node_name(GO_ID)
+    inputs = Dense(
+        node_output_dim, activation='relu', name=name)(inputs)
     layers[GO_ID] = {'net': inputs}
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
@@ -301,7 +303,7 @@ def model():
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     feature_model = get_feature_model()(inputs)
-    layers = get_layers(feature_model)
+    layers = get_layers(BatchNormalization()(feature_model))
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
