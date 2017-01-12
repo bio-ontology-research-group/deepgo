@@ -34,7 +34,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/cafa3/'
+DATA_ROOT = 'data/cafa3/done/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -73,7 +73,7 @@ def main(function, device, model_name):
     for ind, go_id in enumerate(functions):
         go_indexes[go_id] = ind
     with tf.device('/' + device):
-        model()
+        model(model_name)
 
 
 def load_data():
@@ -107,9 +107,9 @@ def model(model_name):
     data_generator.fit(data, None)
 
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
-    logging.info("Data size: %d" % len(data[0]))
+    logging.info("Data size: %d" % len(data))
     logging.info('Loading the model')
-    with open(model_name + '.json', 'r') as f:
+    with open(DATA_ROOT + model_name + '_' + FUNCTION + '.json', 'r') as f:
         json_string = next(f)
     model = model_from_json(json_string)
 
@@ -124,8 +124,9 @@ def model(model_name):
     logging.info('Loading weights')
     load_model_weights(model, model_path)
 
+    logging.info('Predicting')
     preds = model.predict_generator(
-        data_generator, val_samples=len(data))
+        data_generator, val_samples=len(data), nb_worker=12)
     for i in xrange(len(preds)):
         preds[i] = preds[i].reshape(-1, 1)
     preds = np.concatenate(preds, axis=1)
