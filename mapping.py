@@ -72,26 +72,32 @@ def string_uni():
             it = line.strip().split('\t')
             mapping[it[1].upper()[:-1]] = it[0]
 
+    prots = dict()
+    with open('data/uni_uni.dat') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            prots[it[0]] = it[1]
+
     embeds = list()
     accessions = list()
-    with open('data/graph.mapping.out') as f:
+    proteins = list()
+    with open('data/graph_reps.tab') as f:
         for line in f:
             it = line.strip().split('\t')
             st_id = it[0].upper()
             if st_id in mapping:
-                accessions.append(mapping[st_id])
-    # with open('data/graph_reps.tab') as f:
-    #     for line in f:
-    #         it = line.strip().split('\t')
-    #         st_id = it[0].upper()
-    #         if st_id in mapping:
-    #             accessions.append(mapping[st_id])
-    #             rep = np.array(map(float, it[1:]), dtype='float32')
-    #             embeds.append(rep)
+                ac_id = mapping[st_id]
+                if ac_id in prots:
+                    accessions.append(ac_id)
+                    proteins.append(prots[ac_id])
+                    rep = np.array(map(float, it[1:]), dtype='float32')
+                    embeds.append(rep)
     df = pd.DataFrame({
-        'accessions': accessions})
+        'accessions': accessions,
+        'proteins': proteins,
+        'embeddings': embeds})
     print(len(df))
-    df.to_pickle('data/graph_accessions.pkl')
+    df.to_pickle('data/graph_embeddings.pkl')
 
 
 def main():

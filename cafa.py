@@ -162,6 +162,17 @@ def get_data():
         'ngrams': ngrams,
         'orgs': orgs})
     print(len(df))
+    embed_df = pd.read_pickle('data/graph_embeddings.pkl')
+
+    df = pd.merge(df, embed_df, on='proteins', how='left')
+
+    missing_rep = 0
+    for i, row in df.iterrows():
+        if not isinstance(row['embeddings'], np.ndarray):
+            row['embeddings'] = np.zeros((256,), dtype='float32')
+            missing_rep += 1
+    print(missing_rep)
+
     df.to_pickle('data/cafa3/targets.pkl')
 
 
@@ -180,7 +191,55 @@ def cafa2string():
     print(c)
 
 
+def get_results(model):
+    root = 'data/cafa3/done/'
+    mf_df = pd.read_pickle(root + 'mf.pkl')
+    cc_df = pd.read_pickle(root + 'cc.pkl')
+    bp_df = pd.read_pickle(root + 'bp.pkl')
+    targets = pd.read_pickle(root + 'targets.pkl')
+    mf_preds = pd.read_pickle(root + model + '_preds_mf.pkl')
+    mf_preds = mf_preds.rename(index=str, columns={"predictions": "mf"})
+    cc_preds = pd.read_pickle(root + model + '_preds_cc.pkl')
+    cc_preds = cc_preds.rename(index=str, columns={"predictions": "cc"})
+    bp_preds = pd.read_pickle(root + model + '_preds_bp.pkl')
+    bp_preds = bp_preds.rename(index=str, columns={"predictions": "bp"})
+    df = pd.merge(targets, mf_preds, on='targets')
+    df = pd.merge(df, cc_preds, on='targets')
+    df = pd.merge(df, bp_preds, on='targets')
+    mf = map(str, mf_df['functions'].values)
+    cc = map(str, cc_df['functions'].values)
+    bp = map(str, bp_df['functions'].values)
+    taxons = set(df['orgs'].values)
+    for tax_id in taxons:
+        with open(root + 'model3/' + 'cbrcborg_3_' + tax_id + '.txt', 'w') as f:
+            f.write('AUTHOR CBRC_BORG\n')
+            f.write('MODEL 3\n')
+            f.write('KEYWORDS sequence, neural networks, deep learning.\n')
+            res_df = df.loc[df['orgs'] == tax_id]
+            for i, row in res_df.iterrows():
+                target_id = str(row['targets'])
+                scores = np.round(row['mf'], 2)
+                for j, go_id in enumerate(mf):
+                    score = scores[j]
+                    if score >= 0.1:
+                        score = '%.2f' % score
+                        f.write(target_id + '\t' + go_id + '\t' + score + '\n')
+                scores = np.round(row['cc'], 2)
+                for j, go_id in enumerate(cc):
+                    score = scores[j]
+                    if score >= 0.1:
+                        score = '%.2f' % score
+                        f.write(target_id + '\t' + go_id + '\t' + score + '\n')
+                scores = np.round(row['bp'], 2)
+                for j, go_id in enumerate(bp):
+                    score = scores[j]
+                    if score >= 0.1:
+                        score = '%.2f' % score
+                        f.write(target_id + '\t' + go_id + '\t' + score + '\n')
+
+
 def main(*args, **kwargs):
+    # get_results('model_seq')
     get_data()
     # cafa3()
     # fasta2tabs()

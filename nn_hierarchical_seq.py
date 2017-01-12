@@ -324,15 +324,15 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data),
-        nb_epoch=nb_epoch,
-        validation_data=valid_generator,
-        nb_val_samples=len(val_data),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
-    save_model_weights(model, last_model_path)
+    # model.fit_generator(
+    #     train_generator,
+    #     samples_per_epoch=len(train_data),
+    #     nb_epoch=nb_epoch,
+    #     validation_data=valid_generator,
+    #     nb_val_samples=len(val_data),
+    #     max_q_size=batch_size,
+    #     callbacks=[checkpointer, earlystopper])
+    # save_model_weights(model, last_model_path)
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)

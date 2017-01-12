@@ -96,7 +96,7 @@ def load_data(split=0.95):
     df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = np.arange(n)
-    np.random.seed(55)
+    np.random.seed(10)
     np.random.shuffle(index)
     train_n = int(n * split)
     # valid_n = int(train_n * 0.8)
@@ -122,11 +122,11 @@ def load_data(split=0.95):
 
     def get_values(data_frame):
         labels = reshape(data_frame['labels'].values)
-        trigrams = sequence.pad_sequences(
+        ngrams = sequence.pad_sequences(
             data_frame['ngrams'].values, maxlen=MAXLEN)
-        trigrams = reshape(trigrams)
-        rep = reshape(data_frame['reps'].values)
-        data = (trigrams, rep)
+        ngrams = reshape(ngrams)
+        rep = reshape(data_frame['embeddings'].values)
+        data = (ngrams, rep)
         return data, labels
 
     train = get_values(train_df)
@@ -152,7 +152,7 @@ def get_feature_model():
         border_mode='valid',
         activation='relu',
         subsample_length=1))
-    model.add(MaxPooling1D(pool_length=10, stride=5))
+    model.add(MaxPooling1D(pool_length=64, stride=32))
     model.add(Flatten())
     return model
 
@@ -248,7 +248,7 @@ def get_layers(inputs, node_output_dim=256):
             q.append((node_id, inputs))
     while len(q) > 0:
         node_id, net = q.popleft()
-        parent_nets = []
+        parent_nets = [inputs]
         for p_id in get_parents(go, node_id):
             if p_id in func_set:
                 parent_nets.append(layers[p_id]['net'])
