@@ -88,8 +88,8 @@ def load_data():
         ngrams = sequence.pad_sequences(
             data_frame['ngrams'].values, maxlen=MAXLEN)
         ngrams = reshape(ngrams)
-        # rep = reshape(data_frame['reps'].values)
-        return ngrams
+        embeddings = reshape(data_frame['embeddings'].values)
+        return (ngrams, embeddings)
 
     data = get_values(df)
 

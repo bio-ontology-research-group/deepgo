@@ -214,7 +214,7 @@ def get_results(model):
         with open(root + 'model3/' + 'cbrcborg_3_' + tax_id + '.txt', 'w') as f:
             f.write('AUTHOR CBRC_BORG\n')
             f.write('MODEL 3\n')
-            f.write('KEYWORDS sequence, neural networks, deep learning.\n')
+            f.write('KEYWORDS sequence properties, machine learning.\n')
             res_df = df.loc[df['orgs'] == tax_id]
             for i, row in res_df.iterrows():
                 target_id = str(row['targets'])
@@ -236,11 +236,12 @@ def get_results(model):
                     if score >= 0.1:
                         score = '%.2f' % score
                         f.write(target_id + '\t' + go_id + '\t' + score + '\n')
+            f.write('END\n')
 
 
 def main(*args, **kwargs):
-    # get_results('model_seq')
-    get_data()
+    get_results('model_seq')
+    # get_data()
     # cafa3()
     # fasta2tabs()
     # cafa2string()
