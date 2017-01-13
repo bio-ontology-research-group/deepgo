@@ -107,7 +107,7 @@ def model(model_name):
     data_generator.fit(data, None)
 
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
-    logging.info("Data size: %d" % len(data))
+    logging.info("Data size: %d" % len(data[0]))
     logging.info('Loading the model')
     with open(DATA_ROOT + model_name + '_' + FUNCTION + '.json', 'r') as f:
         json_string = next(f)
@@ -126,7 +126,7 @@ def model(model_name):
 
     logging.info('Predicting')
     preds = model.predict_generator(
-        data_generator, val_samples=len(data), nb_worker=12)
+        data_generator, val_samples=len(data[0]), nb_worker=12)
     for i in xrange(len(preds)):
         preds[i] = preds[i].reshape(-1, 1)
     preds = np.concatenate(preds, axis=1)
