@@ -11,7 +11,7 @@ from utils import (
 from aaindex import is_ok
 import click as ck
 
-DATA_ROOT = 'data/swissprot/'
+DATA_ROOT = 'data/cafa3/'
 
 
 @ck.command()
@@ -51,7 +51,7 @@ def load_data():
     gos = list()
     labels = list()
     ngrams = list()
-    df = pd.read_pickle(DATA_ROOT + 'swissprot.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
     # Filtering data by sequences
     index = list()
     for i, row in df.iterrows():
@@ -63,9 +63,9 @@ def load_data():
         go_list = []
         for item in row['annots']:
             items = item.split('|')
-            # if items[1] in EXP_CODES:
-            #     go_list.append(items[0])
-            go_list.append(items[0])
+            if items[1] in EXP_CODES:
+                go_list.append(items[0])
+            # go_list.append(items[0])
         go_set = set()
         for go_id in go_list:
             if go_id in func_set:
@@ -95,8 +95,6 @@ def load_data():
 
 
 def load_rep_df():
-    proteins = list()
-    reps = list()
     df = pd.read_pickle('data/graph_embeddings.pkl')
     return df
 
@@ -117,9 +115,9 @@ def load_org_df():
 
 def run(*args, **kwargs):
     df = load_data()
-    org_df = load_org_df()
+    # org_df = load_org_df()
     rep_df = load_rep_df()
-    df = pd.merge(df, org_df, on='proteins', how='left')
+    # df = pd.merge(df, org_df, on='proteins', how='left')
     df = pd.merge(df, rep_df, on='proteins', how='left')
     missing_rep = 0
     for i, row in df.iterrows():

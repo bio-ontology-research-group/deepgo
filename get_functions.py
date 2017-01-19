@@ -7,9 +7,10 @@ from utils import (
     FUNC_DICT,
     EXP_CODES)
 from collections import deque
+from aaindex import is_ok
 
 
-DATA_ROOT = 'data/swissprot/'
+DATA_ROOT = 'data/cafa3/'
 
 
 @ck.command()
@@ -54,14 +55,16 @@ def dfs(go_id):
 
 
 def get_functions(annot_num):
-    df = pd.read_pickle(DATA_ROOT + 'swissprot.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
     annots = dict()
     for i, row in df.iterrows():
         go_set = set()
+        if not is_ok(row['sequences']):
+            continue
         for go_id in row['annots']:
             go_id = go_id.split('|')
-            # if go_id[1] not in EXP_CODES:
-            #     continue
+            if go_id[1] not in EXP_CODES:
+                continue
             go_id = go_id[0]
             if go_id in func_set:
                 go_set |= get_anchestors(go, go_id)

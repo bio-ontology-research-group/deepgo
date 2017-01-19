@@ -3,6 +3,9 @@ from __future__ import print_function
 from __future__ import absolute_import
 import pandas as pd
 import numpy as np
+from utils import EXP_CODES
+import os
+import requests
 
 
 def to_pickle():
@@ -16,18 +19,35 @@ def to_pickle():
             proteins.append(ids[2])
             accessions.append(ids[1])
             sequences.append(items[1])
+    with open('data/cafa3/uniprot_trembl.tab') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            proteins.append(items[1])
+            accessions.append(items[0])
+            sequences.append(items[2])
     seq_df = pd.DataFrame({
         'proteins': proteins,
         'accessions': accessions,
         'sequences': sequences
     })
-    proteins = list()
-    annots = list()
+    annots_dict = dict()
     with open('data/cafa3/swissprot.tab') as f:
         for line in f:
             items = line.strip().split('\t')
-            proteins.append(items[0])
-            annots.append(items[2:])
+            accessions = items[1].split(';')
+            annots_dict[items[0]] = set(items[2:])
+    goa_df = pd.read_pickle('data/cafa3/goa_annots.pkl')
+    for i, row in goa_df.iterrows():
+        prot_id = row['proteins']
+        if prot_id in annots_dict:
+            annots_dict[prot_id] |= set(row['annots'])
+        else:
+            annots_dict[prot_id] = set(row['annots'])
+    proteins = list()
+    annots = list()
+    for prot, gos in annots_dict.iteritems():
+        annots.append(list(gos))
+        proteins.append(prot)
     annots_df = pd.DataFrame({
         'proteins': proteins,
         'annots': annots
@@ -35,6 +55,49 @@ def to_pickle():
     df = pd.merge(seq_df, annots_df, on='proteins')
     print(len(df))
     df.to_pickle('data/cafa3/swissprot.pkl')
+
+
+def goa_pickle():
+    goa = dict()
+
+    prots = dict()
+    with open('data/uni_uni.dat') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            prots[it[0]] = it[1]
+
+    with open('data/cafa3/goa_all.gaf') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            acc = it[1]
+            code = it[6]
+            go_id = it[4]
+            if acc not in goa:
+                goa[acc] = set()
+            goa[acc].add(go_id + '|' + code)
+    accessions = list()
+    annots = list()
+
+    proteins = list()
+
+    for access, gos in goa.iteritems():
+        if access in prots:
+            accessions.append(access)
+            proteins.append(prots[access])
+            annots.append(list(gos))
+        else:
+            r = requests.get('http://www.uniprot.org/uniprot/' + access + '.fasta')
+            it = r.text.split('|')
+            if len(it) > 1 and it[1] in prots:
+                print(access, it[1], prots[it[1]])
+                access = it[1]
+                accessions.append(access)
+                proteins.append(prots[access])
+                annots.append(list(gos))
+
+    df = pd.DataFrame({'accessions': accessions, 'annots': annots, 'proteins': proteins})
+    print(len(df))
+    df.to_pickle('data/cafa3/goa_annots.pkl')
 
 
 def filter_exp():
@@ -81,6 +144,7 @@ def string_uni():
     embeds = list()
     accessions = list()
     proteins = list()
+    string = list()
     with open('data/graph_reps.tab') as f:
         for line in f:
             it = line.strip().split('\t')
@@ -92,16 +156,207 @@ def string_uni():
                     proteins.append(prots[ac_id])
                     rep = np.array(map(float, it[1:]), dtype='float32')
                     embeds.append(rep)
+                    string.append(it[0])
     df = pd.DataFrame({
         'accessions': accessions,
         'proteins': proteins,
-        'embeddings': embeds})
+        'embeddings': embeds,
+        'string': string})
     print(len(df))
     df.to_pickle('data/graph_embeddings.pkl')
 
 
+def idmapping():
+    access = list()
+    proteins = list()
+    with open('data/uni_uni.dat') as f:
+        for l in f:
+            it = l.strip().split('\t')
+            access.append(it[0])
+            proteins.append(it[1])
+    print(len(access), len(proteins))
+    df = pd.DataFrame({'accessions': access, 'proteins': proteins})
+
+    access = list()
+    string = list()
+    with open('data/string_idmapping.dat') as f:
+        for l in f:
+            it = l.strip().split('\t')
+            access.append(it[0])
+            string.append(it[2])
+    st_df = pd.DataFrame({'accessions': access, 'string': string})
+    df = pd.merge(df, st_df, on='accessions', how='left')
+
+    access = list()
+    genes = list()
+    with open('data/uni2ncbi.tab') as f:
+        for l in f:
+            it = l.strip().split('\t')
+            access.append(it[0])
+            genes.append(it[1])
+
+    gene_df = pd.DataFrame({'accessions': access, 'genes': genes})
+    df = pd.merge(df, gene_df, on='accessions', how='left')
+
+    access = list()
+    orgs = list()
+    with open('data/uni2org.tab') as f:
+        for l in f:
+            it = l.strip().split('\t')
+            access.append(it[0])
+            orgs.append(it[1])
+
+    org_df = pd.DataFrame({'accessions': access, 'orgs': orgs})
+    df = pd.merge(df, org_df, on='accessions', how='left')
+    df.to_pickle('data/idmapping.pkl')
+
+
+def idmapping_org(org_id):
+    df = pd.read_pickle('data/idmapping.pkl')
+    df = df.loc[df['orgs'] == org_id]
+    df.to_pickle('data/idmapping.' + org_id + '.pkl')
+
+
+def predictions(org_id):
+    preds = dict()
+    with open('data/cafa3/done/model1/cbrcborg_1_' + org_id + '.txt') as f:
+        next(f)
+        next(f)
+        next(f)
+        for line in f:
+            if line.strip() == 'END':
+                continue
+            it = line.strip().split('\t')
+            score = float(it[2])
+            if score < 0.35:
+                continue
+            target_id = it[0]
+            go_id = it[1]
+            if target_id not in preds:
+                preds[target_id] = list()
+            preds[target_id].append(go_id)
+    targets = list()
+    predicts = list()
+    for t, p in preds.iteritems():
+        targets.append(t)
+        predicts.append(p)
+    df = pd.DataFrame({'targets': targets, 'predictions': predicts})
+    tar_df = pd.read_pickle('data/cafa3/targets.pkl')
+    tar_df = tar_df.loc[tar_df['orgs'] == org_id]
+    id_df = pd.read_pickle('data/idmapping.' + org_id + '.pkl')
+    tar_df = pd.merge(tar_df, id_df, on='proteins', how='left')
+    df = pd.merge(df, tar_df, on='targets', how='left')
+    df.to_pickle('data/human_predictions.pkl')
+    with open('data/human_predictions.tab', 'w') as f:
+        for i, row in df.iterrows():
+            if not isinstance(row['string'], str):
+                continue
+            f.write(row['string'])
+            for go_id in row['predictions']:
+                f.write('\t' + go_id)
+            f.write('\n')
+
+
+def human_go_annotations():
+    annots = {}
+    df = pd.read_pickle('data/cafa3/swissprot_exp.pkl')
+    for i, row in df.iterrows():
+        acc = row['accessions']
+        gos = set()
+        for go_id in row['annots']:
+            go_id = go_id.split('|')
+            if go_id[1] in EXP_CODES:
+                gos.add(go_id[0])
+        if len(gos) > 0:
+            annots[acc] = gos
+    id_df = pd.read_pickle('data/idmapping.9606.pkl')
+    st_ids = dict()
+    for i, row in id_df.iterrows():
+        if isinstance(row['string'], str):
+            st_ids[row['accessions']] = row['string']
+    with open('data/human_annotations.tab', 'w') as f:
+        for acc, gos in annots.iteritems():
+            if acc in st_ids:
+                f.write(st_ids[acc])
+                for go_id in gos:
+                    f.write('\t' + go_id)
+                f.write('\n')
+
+
+def filter_goa():
+    ROOT = 'data/goa/'
+    files = os.listdir(ROOT)
+    files = [filename for filename in files if not filename.startswith('gp2protein')]
+    print(files)
+    fw = open(ROOT + 'goa_all.gaf', 'w')
+    for filename in files:
+        with open(ROOT + filename) as f:
+            for line in f:
+                if not line.startswith('UniProtKB'):
+                    continue
+                it = line.strip().split('\t')
+                if it[6] not in EXP_CODES:
+                    continue
+                fw.write(line)
+    fw.close()
+
+
+def gp2protein(org):
+    mapping = {}
+    with open('data/goa/gp2protein.' + org) as f:
+        for line in f:
+            if line.startswith('!'):
+                continue
+            it = line.strip().split('\t')
+            if len(it) < 2:
+                continue
+            # ind = it[0].find(':')
+            # prot_id = it[0][ind + 1:]
+            # if org == 'tair':
+            #     uni_ids = it[1].split('|')
+            # else:
+            #     uni_ids = it[1].split(';')
+            prot_id = it[1]
+            uni_ids = [it[0]]
+            for uni_id in uni_ids:
+                # if uni_id.startswith('UniProtKB:'):
+                #     uni_id = uni_id[10:]
+                if prot_id not in mapping:
+                    mapping[prot_id] = list()
+                mapping[prot_id].append(uni_id)
+
+    fw = open('data/goa/goa_' + org + '.gaf', 'w')
+    with open('data/goa/gene_association.' + org) as f:
+        for line in f:
+            if line.startswith('!'):
+                continue
+            it = list(line.strip().split('\t'))
+            if it[6] not in EXP_CODES:
+                continue
+            if it[1] in mapping:
+                for uni_id in mapping[it[1]]:
+                    fw.write('UniProtKB\t' + uni_id)
+                    for i in xrange(2, len(it)):
+                        fw.write('\t' + it[i])
+                    fw.write('\n')
+
+
+def download_prots():
+    df = pd.read_pickle('data/cafa3/tremble_prots.pkl')
+    i = 0
+    with open('data/cafa3/uniprot_trembl.dat', 'w') as f:
+        for acc in df['accessions']:
+            r = requests.get('http://www.uniprot.org/uniprot/' + acc + '.fasta')
+            f.write(r.text + '\n')
+            print(i)
+            i += 1
+
+
 def main():
-    string_uni()
+    to_pickle()
+    filter_exp()
+    # goa_pickle()
+    # download_prots()
 
 
 if __name__ == '__main__':

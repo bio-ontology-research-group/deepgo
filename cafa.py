@@ -25,9 +25,6 @@ def get_fly_mapping():
 
 def read_fasta(filename):
     data = list()
-    org = os.path.basename(filename).split('.')[1]
-    if org == '7227':
-        mapping = get_fly_mapping()
     c = 0
     with open(filename, 'r') as f:
         seq = ''
@@ -36,15 +33,8 @@ def read_fasta(filename):
             if line.startswith('>'):
                 if seq != '':
                     data.append(seq)
-                line = line[1:].split()
-                if org == '7227':
-                    if line[1] in mapping:
-                        line = org + '\t' + line[0] + '\t' + mapping[line[1]]
-                    else:
-                        line = org + '\t' + line[0] + '\t' + line[1]
-                        c += 1
-                else:
-                    line = org + '\t' + line[0] + '\t' + line[1]
+                line = line[1:].split()[0].split('|')
+                line = line[1] + '\t' + line[2]
                 seq = line + '\t'
             else:
                 seq += line
@@ -101,8 +91,8 @@ def fasta2tabs():
 
 
 def sprot2tabs():
-    data = read_fasta('data/uniprot_sprot.fasta')
-    with open('data/cafa3/uniprot_sprot.tab', 'w') as f:
+    data = read_fasta('data/cafa3/uniprot_trembl.fasta')
+    with open('data/cafa3/uniprot_trembl.tab', 'w') as f:
         for line in data:
             f.write(line + '\n')
 
@@ -192,7 +182,7 @@ def cafa2string():
 
 
 def get_results(model):
-    root = 'data/cafa3/done/'
+    root = 'data/swissprot/done/'
     mf_df = pd.read_pickle(root + 'mf.pkl')
     cc_df = pd.read_pickle(root + 'cc.pkl')
     bp_df = pd.read_pickle(root + 'bp.pkl')
@@ -211,9 +201,9 @@ def get_results(model):
     bp = map(str, bp_df['functions'].values)
     taxons = set(df['orgs'].values)
     for tax_id in taxons:
-        with open(root + 'model3/' + 'cbrcborg_3_' + tax_id + '.txt', 'w') as f:
+        with open(root + 'model2/' + 'cbrcborg_2_' + tax_id + '.txt', 'w') as f:
             f.write('AUTHOR CBRC_BORG\n')
-            f.write('MODEL 3\n')
+            f.write('MODEL 1\n')
             f.write('KEYWORDS sequence properties, machine learning.\n')
             res_df = df.loc[df['orgs'] == tax_id]
             for i, row in res_df.iterrows():
@@ -240,13 +230,13 @@ def get_results(model):
 
 
 def main(*args, **kwargs):
-    get_results('model_seq')
+    # get_results('model_seq')
     # get_data()
     # cafa3()
     # fasta2tabs()
     # cafa2string()
     # get_annotations()
-    # sprot2tabs()
+    sprot2tabs()
 
 
 if __name__ == '__main__':
