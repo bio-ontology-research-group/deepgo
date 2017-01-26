@@ -92,17 +92,17 @@ def main(function, device, threshold):
         model()
 
 
-def load_data(split=0.95):
+def load_data(split=0.7):
     df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = np.arange(n)
     np.random.seed(10)
     np.random.shuffle(index)
     train_n = int(n * split)
-    # valid_n = int(train_n * 0.8)
+    valid_n = int(train_n * 0.9)
 
-    train_df = df.loc[index[:train_n]]
-    valid_df = df.loc[index[train_n:]]
+    train_df = df.loc[index[:valid_n]]
+    valid_df = df.loc[index[valid_n:train_n]]
     test_df = df.loc[index[train_n:]]
     # print(len(test_df))
     # test_df = test_df[test_df['orgs'] == '4932']

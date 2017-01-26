@@ -100,24 +100,15 @@ def load_rep_df():
 
 
 def load_org_df():
-    proteins = list()
-    orgs = list()
-    with open('data/uniprot-all-org.tab') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            prot_id = items[0]
-            org_id = items[2]
-            proteins.append(prot_id)
-            orgs.append(org_id)
-    df = pd.DataFrame({'proteins': proteins, 'orgs': orgs})
+    df = pd.read_pickle('data/protein_orgs.pkl')
     return df
 
 
 def run(*args, **kwargs):
     df = load_data()
-    # org_df = load_org_df()
+    org_df = load_org_df()
     rep_df = load_rep_df()
-    # df = pd.merge(df, org_df, on='proteins', how='left')
+    df = pd.merge(df, org_df, on='proteins', how='left')
     df = pd.merge(df, rep_df, on='proteins', how='left')
     missing_rep = 0
     for i, row in df.iterrows():

@@ -4,6 +4,8 @@ import os
 import numpy as np
 import pandas as pd
 from aaindex import is_ok
+import gzip as gz
+from utils import EXP_CODES, get_gene_ontology, get_anchestors
 
 MAXLEN = 1000
 
@@ -44,8 +46,8 @@ def read_fasta(filename):
 
 
 def get_annotations():
-    w = open('data/cafa3/swissprot.tab', 'w')
-    with open('data/uniprot_sprot.dat', 'r') as f:
+    w = open('data/cafa3/tremble.tab', 'w')
+    with gz.open('data/uniprot_trembl.dat.gz', 'r') as f:
         prot_id = ''
         prot_ac = ''
         annots = list()
@@ -66,13 +68,41 @@ def get_annotations():
                 if items[0] == 'GO':
                     go_id = items[1]
                     code = items[3].split(':')[0]
-                    annots.append(go_id + '|' + code)
+                    if code in EXP_CODES:
+                        annots.append(go_id + '|' + code)
 
         if len(annots) > 0:
             w.write(prot_id + '\t' + prot_ac)
             for go_id in annots:
                 w.write('\t' + go_id)
             w.write('\n')
+        w.close()
+
+
+def get_sequences():
+    prots = set()
+    with open('data/cafa3/tremble.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            prots.add(it[0])
+    w = open('data/cafa3/tremble_sequences.tab', 'w')
+    with gz.open('data/uniprot_trembl.dat.gz', 'r') as f:
+        prot_id = ''
+        for line in f:
+            items = line.strip().split('   ')
+            if items[0] == 'ID' and len(items) > 1:
+                prot_id = items[1]
+            elif items[0] == 'SQ':
+                if prot_id not in prots:
+                    continue
+                seq = next(f).strip().replace(' ', '')
+                while True:
+                    sq = next(f).strip().replace(' ', '')
+                    if sq == '//':
+                        break
+                    else:
+                        seq += sq
+                w.write(prot_id + '\t' + seq + '\n')
         w.close()
 
 
@@ -181,8 +211,22 @@ def cafa2string():
     print(c)
 
 
+def get_real_annotations():
+    go = get_gene_ontology()
+    df = pd.read_pickle('data/cafa3/swissprot_exp.pkl')
+    annots = {}
+    for i, row in df.iterrows():
+        go_set = set()
+        for go_id in row['annots']:
+            go_id = go_id.split('|')
+            if go_id[0] in go and go_id[1] in EXP_CODES:
+                go_set |= get_anchestors(go, go_id[0])
+        annots[row['proteins']] = go_set
+    return annots
+
+
 def get_results(model):
-    root = 'data/swissprot/done/'
+    root = 'data/cafa3/done3/'
     mf_df = pd.read_pickle(root + 'mf.pkl')
     cc_df = pd.read_pickle(root + 'cc.pkl')
     bp_df = pd.read_pickle(root + 'bp.pkl')
@@ -200,43 +244,54 @@ def get_results(model):
     cc = map(str, cc_df['functions'].values)
     bp = map(str, bp_df['functions'].values)
     taxons = set(df['orgs'].values)
+    annots = get_real_annotations()
     for tax_id in taxons:
-        with open(root + 'model2/' + 'cbrcborg_2_' + tax_id + '.txt', 'w') as f:
+        res_df = df.loc[df['orgs'] == tax_id]
+        results = {}
+        for i, row in res_df.iterrows():
+            prot_id = str(row['proteins'])
+            target_id = str(row['targets'])
+            if target_id not in results:
+                results[target_id] = {}
+            scores = np.round(row['mf'], 2)
+            for j, go_id in enumerate(mf):
+                score = scores[j]
+                if score >= 0.01:
+                    results[target_id][go_id] = score
+            scores = np.round(row['cc'], 2)
+            for j, go_id in enumerate(cc):
+                score = scores[j]
+                if score >= 0.01:
+                    results[target_id][go_id] = score
+            scores = np.round(row['bp'], 2)
+            for j, go_id in enumerate(bp):
+                score = scores[j]
+                if score >= 0.01:
+                    results[target_id][go_id] = score
+            if prot_id in annots:
+                for go_id in annots[prot_id]:
+                    results[target_id][go_id] = 1.0
+
+        with open(root + 'model2/' + 'cbrcborg_1_' + tax_id + '.txt', 'w') as f:
             f.write('AUTHOR CBRC_BORG\n')
-            f.write('MODEL 1\n')
+            f.write('MODEL 2\n')
             f.write('KEYWORDS sequence properties, machine learning.\n')
-            res_df = df.loc[df['orgs'] == tax_id]
-            for i, row in res_df.iterrows():
-                target_id = str(row['targets'])
-                scores = np.round(row['mf'], 2)
-                for j, go_id in enumerate(mf):
-                    score = scores[j]
-                    if score >= 0.1:
-                        score = '%.2f' % score
-                        f.write(target_id + '\t' + go_id + '\t' + score + '\n')
-                scores = np.round(row['cc'], 2)
-                for j, go_id in enumerate(cc):
-                    score = scores[j]
-                    if score >= 0.1:
-                        score = '%.2f' % score
-                        f.write(target_id + '\t' + go_id + '\t' + score + '\n')
-                scores = np.round(row['bp'], 2)
-                for j, go_id in enumerate(bp):
-                    score = scores[j]
-                    if score >= 0.1:
-                        score = '%.2f' % score
-                        f.write(target_id + '\t' + go_id + '\t' + score + '\n')
+            for target_id, annots in results.iteritems():
+                for go_id, score in annots.iteritems():
+                    sc = '%.2f' % score
+                    f.write(target_id + '\t' + go_id + '\t' + sc + '\n')
             f.write('END\n')
 
 
 def main(*args, **kwargs):
-    # get_results('model_seq')
+    get_results('model')
     # get_data()
     # cafa3()
     # fasta2tabs()
     # cafa2string()
     # get_annotations()
-    sprot2tabs()
+    # get_sequences()
+    # sprot2tabs()
 
 
 if __name__ == '__main__':

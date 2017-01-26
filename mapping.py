@@ -3,12 +3,13 @@ from __future__ import print_function
 from __future__ import absolute_import
 import pandas as pd
 import numpy as np
-from utils import EXP_CODES
+from utils import EXP_CODES, get_gene_ontology
 import os
 import requests
 
 
 def to_pickle():
+    prots = set()
     proteins = list()
     accessions = list()
     sequences = list()
@@ -17,14 +18,26 @@ def to_pickle():
             items = line.strip().split('\t')
             ids = items[0].split('|')
             proteins.append(ids[2])
+            prots.add(ids[2])
             accessions.append(ids[1])
             sequences.append(items[1])
+
+    with open('data/cafa3/tremble_data.tab') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            if items[0] not in prots:
+                prots.add(items[0])
+                proteins.append(items[0])
+                accessions.append(items[1])
+                sequences.append(items[2])
+
     with open('data/cafa3/uniprot_trembl.tab') as f:
         for line in f:
             items = line.strip().split('\t')
-            proteins.append(items[1])
-            accessions.append(items[0])
-            sequences.append(items[2])
+            if items[1] not in prots:
+                proteins.append(items[1])
+                accessions.append(items[0])
+                sequences.append(items[2])
     seq_df = pd.DataFrame({
         'proteins': proteins,
         'accessions': accessions,
@@ -36,6 +49,15 @@ def to_pickle():
             items = line.strip().split('\t')
             accessions = items[1].split(';')
             annots_dict[items[0]] = set(items[2:])
+
+    with open('data/cafa3/tremble_data.tab') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            prot_id = items[0]
+            if prot_id in annots_dict:
+                annots_dict[prot_id] |= set(items[3].split('; '))
+            else:
+                annots_dict[prot_id] = set(items[3].split('; '))
     goa_df = pd.read_pickle('data/cafa3/goa_annots.pkl')
     for i, row in goa_df.iterrows():
         prot_id = row['proteins']
@@ -247,17 +269,23 @@ def predictions(org_id):
     tar_df = pd.merge(tar_df, id_df, on='proteins', how='left')
     df = pd.merge(df, tar_df, on='targets', how='left')
     df.to_pickle('data/human_predictions.pkl')
+    testing = set()
+    with open('data/cafa3/human_test.tab') as f:
+        for line in f:
+            testing.add(line.strip())
     with open('data/human_predictions.tab', 'w') as f:
         for i, row in df.iterrows():
             if not isinstance(row['string'], str):
                 continue
-            f.write(row['string'])
-            for go_id in row['predictions']:
-                f.write('\t' + go_id)
-            f.write('\n')
+            if row['proteins'] in testing:
+                f.write(row['string'])
+                for go_id in row['predictions']:
+                    f.write('\t' + go_id)
+                f.write('\n')
 
 
 def human_go_annotations():
+    go = get_gene_ontology()
     annots = {}
     df = pd.read_pickle('data/cafa3/swissprot_exp.pkl')
     for i, row in df.iterrows():
@@ -265,7 +293,7 @@ def human_go_annotations():
         gos = set()
         for go_id in row['annots']:
             go_id = go_id.split('|')
-            if go_id[1] in EXP_CODES:
+            if go_id[1] in EXP_CODES and go_id[0] in go:
                 gos.add(go_id[0])
         if len(gos) > 0:
             annots[acc] = gos
@@ -352,11 +380,31 @@ def download_prots():
             i += 1
 
 
+def merge_trembl():
+    seqs = {}
+    with open('data/cafa3/tremble_sequences.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            seqs[it[0]] = it[1]
+    w = open('data/cafa3/tremble_data.tab', 'w')
+    with open('data/cafa3/tremble.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            w.write(it[0] + '\t' + it[1] + '\t' + seqs[it[0]] + '\t' + it[2])
+            for i in xrange(3, len(it)):
+                w.write('; ' + it[i])
+            w.write('\n')
+    w.close()
+
+
 def main():
-    to_pickle()
+    # human_go_annotations()
+    # predictions('9606')
+    # to_pickle()
     filter_exp()
     # goa_pickle()
     # download_prots()
+    # merge_trembl()
 
 
 if __name__ == '__main__':
