@@ -62,18 +62,18 @@ ind = 0
     default='gpu:0',
     help='GPU or CPU device id')
 @ck.option(
-    '--threshold',
-    default=0.5,
-    help='Threshold for prediction')
-def main(function, device, threshold):
+    '--org',
+    default=None,
+    help='Organism id for filtering test set')
+def main(function, device, org):
     global FUNCTION
     FUNCTION = function
     global GO_ID
     GO_ID = FUNC_DICT[FUNCTION]
     global go
     go = get_gene_ontology('go.obo')
-    global THRESHOLD
-    THRESHOLD = threshold
+    global ORG
+    ORG = org
     func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
     global functions
     functions = func_df['functions'].values
@@ -104,9 +104,10 @@ def load_data(split=0.7):
     train_df = df.loc[index[:valid_n]]
     valid_df = df.loc[index[valid_n:train_n]]
     test_df = df.loc[index[train_n:]]
-    # print(len(test_df))
-    # test_df = test_df[test_df['orgs'] == '4932']
-    # print(len(test_df))
+    if ORG is not None:
+        print('Unfiltered test size:', len(test_df))
+        test_df = test_df[test_df['orgs'] == '4932']
+        print('Filtered test size:', len(test_df))
 
     def reshape(values):
         values = np.hstack(values).reshape(
@@ -338,15 +339,15 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data[0]),
-        nb_epoch=nb_epoch,
-        validation_data=valid_generator,
-        nb_val_samples=len(val_data[0]),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
-    save_model_weights(model, last_model_path)
+    # model.fit_generator(
+    #     train_generator,
+    #     samples_per_epoch=len(train_data[0]),
+    #     nb_epoch=nb_epoch,
+    #     validation_data=valid_generator,
+    #     nb_val_samples=len(val_data[0]),
+    #     max_q_size=batch_size,
+    #     callbacks=[checkpointer, earlystopper])
+    # save_model_weights(model, last_model_path)
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
@@ -370,7 +371,7 @@ def model():
     # logging.info('F measure cosine: \t %f %f %f' % (f, p, r))
     f, p, r = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
-    logging.info('F measure: \t %f %f %f' % (f, p, r))
+    logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('Inconsistent predictions: %d' % incon)
     logging.info('Done in %d sec' % (time.time() - start_time))
@@ -384,28 +385,38 @@ def compute_roc(preds, labels):
 
 
 def compute_performance(preds, labels, gos):
-    predictions = (preds > THRESHOLD).astype(np.int32)
-    total = 0
-    f = 0.0
-    p = 0.0
-    r = 0.0
-    for i in range(labels.shape[0]):
-        tp = np.sum(predictions[i, :] * labels[i, :])
-        fp = np.sum(predictions[i, :]) - tp
-        fn = np.sum(labels[i, :]) - tp
-        if tp == 0 and fp == 0 and fn == 0:
-            continue
-        total += 1
-        if tp != 0:
-            precision = tp / (1.0 * (tp + fp))
-            recall = tp / (1.0 * (tp + fn))
-            p += precision
-            r += recall
-            f += 2 * precision * recall / (precision + recall)
-    f /= total
-    r /= total
-    p /= total
-    return f, p, r
+    preds = np.round(preds, 2)
+    f_max = 0
+    p_max = 0
+    r_max = 0
+    for t in xrange(1, 100):
+        threshold = t / 100.0
+        predictions = (preds > threshold).astype(np.int32)
+        total = 0
+        f = 0.0
+        p = 0.0
+        r = 0.0
+        for i in range(labels.shape[0]):
+            tp = np.sum(predictions[i, :] * labels[i, :])
+            fp = np.sum(predictions[i, :]) - tp
+            fn = np.sum(labels[i, :]) - tp
+            if tp == 0 and fp == 0 and fn == 0:
+                continue
+            total += 1
+            if tp != 0:
+                precision = tp / (1.0 * (tp + fp))
+                recall = tp / (1.0 * (tp + fn))
+                p += precision
+                r += recall
+                f += 2 * precision * recall / (precision + recall)
+        f /= total
+        r /= total
+        p /= total
+        if f_max < f:
+            f_max = f
+            p_max = p
+            r_max = r
+    return f_max, p_max, r_max
 
 
 def get_gos(pred):
