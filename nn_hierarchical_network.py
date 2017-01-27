@@ -106,7 +106,7 @@ def load_data(split=0.7):
     test_df = df.loc[index[train_n:]]
     if ORG is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
-        test_df = test_df[test_df['orgs'] == '4932']
+        test_df = test_df[test_df['orgs'] == ORG]
         print('Filtered test size: %d' % len(test_df))
 
     def reshape(values):
