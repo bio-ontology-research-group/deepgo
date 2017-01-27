@@ -81,7 +81,9 @@ def main(function, device, org):
     func_set = set(functions)
     global all_functions
     all_functions = get_go_set(go, GO_ID)
-    logging.info(len(functions))
+    logging.info('Functions: %s %d' % (FUNCTION, len(functions)))
+    if ORG is not None:
+        logging.info('Organism %s' % ORG)
     global go_indexes
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
@@ -107,7 +109,7 @@ def load_data(split=0.7):
     if ORG is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == ORG]
-        print('Filtered test size: %d' % len(test_df))
+        logging.info('Filtered test size: %d' % len(test_df))
 
     def reshape(values):
         values = np.hstack(values).reshape(
