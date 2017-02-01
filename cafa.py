@@ -283,6 +283,12 @@ def get_results(model):
             f.write('END\n')
 
 
+def get_predictions():
+    root = 'data/cafa3/'
+    mf = pd.read_pickle(root + 'mf.pkl')
+    mf_df = pd.read_pickle(root + 'test-mf-preds.pkl')
+
+
 def main(*args, **kwargs):
     get_results('model_seq')
     # get_data()

@@ -374,7 +374,7 @@ def model():
                     preds[i, go_indexes[p_id]] = preds[i, j]
     # f, p, r = compute_similarity_performance(train_df, test_df, preds)
     # logging.info('F measure cosine: \t %f %f %f' % (f, p, r))
-    f, p, r = compute_performance(preds, test_labels, test_gos)
+    f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
@@ -382,8 +382,8 @@ def model():
     logging.info('Saving the predictions')
     proteins = test_df['proteins']
     predictions = list()
-    for i in xrange(preds.shape[0]):
-        predictions.append(preds[i])
+    for i in xrange(preds_max.shape[0]):
+        predictions.append(preds_max[i])
     df = pd.DataFrame(
         {
             'proteins': proteins, 'predictions': predictions,
@@ -438,7 +438,8 @@ def compute_performance(preds, labels, gos):
             f_max = f
             p_max = p
             r_max = r
-    return f_max, p_max, r_max
+            predictions_max = predictions
+    return f_max, p_max, r_max, predictions_max
 
 
 def get_gos(pred):
