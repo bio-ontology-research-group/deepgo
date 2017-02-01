@@ -226,7 +226,7 @@ def get_real_annotations():
 
 
 def get_results(model):
-    root = 'data/cafa3/done3/'
+    root = 'data/swissprot/done/'
     mf_df = pd.read_pickle(root + 'mf.pkl')
     cc_df = pd.read_pickle(root + 'cc.pkl')
     bp_df = pd.read_pickle(root + 'bp.pkl')
@@ -272,9 +272,9 @@ def get_results(model):
                 for go_id in annots[prot_id]:
                     results[target_id][go_id] = 1.0
 
-        with open(root + 'model2/' + 'cbrcborg_1_' + tax_id + '.txt', 'w') as f:
+        with open(root + 'model3/' + 'cbrcborg_3_' + tax_id + '.txt', 'w') as f:
             f.write('AUTHOR CBRC_BORG\n')
-            f.write('MODEL 2\n')
+            f.write('MODEL 3\n')
             f.write('KEYWORDS sequence properties, machine learning.\n')
             for target_id, annots in results.iteritems():
                 for go_id, score in annots.iteritems():
@@ -284,7 +284,7 @@ def get_results(model):
 
 
 def main(*args, **kwargs):
-    get_results('model')
+    get_results('model_seq')
     # get_data()
     # cafa3()
     # fasta2tabs()

@@ -16,10 +16,16 @@ DATA_ROOT = 'data/cafa3/'
 
 @ck.command()
 @ck.option(
+    '--data',
+    default='data',
+    help='Basename of data pickle file')
+@ck.option(
     '--function',
     default='mf',
     help='Function (mf, bp, cc)')
-def main(function):
+def main(data, function):
+    global DATA
+    DATA = data
     global GO_ID
     GO_ID = FUNC_DICT[function]
     global go
@@ -51,7 +57,7 @@ def load_data():
     gos = list()
     labels = list()
     ngrams = list()
-    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
+    df = pd.read_pickle(DATA_ROOT + DATA + '.pkl')
     # Filtering data by sequences
     index = list()
     for i, row in df.iterrows():
@@ -116,7 +122,7 @@ def run(*args, **kwargs):
             row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
     print(missing_rep)
-    df.to_pickle(DATA_ROOT + 'data-' + FUNCTION + '.pkl')
+    df.to_pickle(DATA_ROOT + DATA + '-' + FUNCTION + '.pkl')
 
 
 if __name__ == '__main__':

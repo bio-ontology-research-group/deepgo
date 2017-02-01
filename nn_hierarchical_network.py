@@ -95,17 +95,20 @@ def main(function, device, org):
 
 
 def load_data(split=0.7):
-    df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
+    # df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
+    # n = len(df)
+    # index = np.arange(n)
+    # np.random.seed(10)
+    # np.random.shuffle(index)
+    # train_n = int(n * split)
+
+    df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = np.arange(n)
-    np.random.seed(10)
-    np.random.shuffle(index)
-    train_n = int(n * split)
-    valid_n = int(train_n * 0.9)
-
+    valid_n = int(n * 0.9)
     train_df = df.loc[index[:valid_n]]
-    valid_df = df.loc[index[valid_n:train_n]]
-    test_df = df.loc[index[train_n:]]
+    valid_df = df.loc[index[valid_n:]]
+    test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
     if ORG is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == ORG]
@@ -341,15 +344,15 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    # model.fit_generator(
-    #     train_generator,
-    #     samples_per_epoch=len(train_data[0]),
-    #     nb_epoch=nb_epoch,
-    #     validation_data=valid_generator,
-    #     nb_val_samples=len(val_data[0]),
-    #     max_q_size=batch_size,
-    #     callbacks=[checkpointer, earlystopper])
-    # save_model_weights(model, last_model_path)
+    model.fit_generator(
+        train_generator,
+        samples_per_epoch=len(train_data[0]),
+        nb_epoch=nb_epoch,
+        validation_data=valid_generator,
+        nb_val_samples=len(val_data[0]),
+        max_q_size=batch_size,
+        callbacks=[checkpointer, earlystopper])
+    save_model_weights(model, last_model_path)
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
