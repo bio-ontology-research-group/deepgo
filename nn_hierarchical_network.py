@@ -405,6 +405,13 @@ def compute_performance(preds, labels, gos):
             tp = np.sum(predictions[i, :] * labels[i, :])
             fp = np.sum(predictions[i, :]) - tp
             fn = np.sum(labels[i, :]) - tp
+            all_gos = set()
+            for go_id in gos[i]:
+                if go_id in all_functions:
+                    all_gos |= get_anchestors(go, go_id)
+            all_gos.discard(GO_ID)
+            all_gos -= func_set
+            fn += len(all_gos)
             if tp == 0 and fp == 0 and fn == 0:
                 continue
             total += 1

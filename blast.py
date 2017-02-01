@@ -15,7 +15,7 @@ def main():
 
 def compute_performance():
     go = get_gene_ontology()
-    go_set = get_go_set(go, CELLULAR_COMPONENT)
+    go_set = get_go_set(go, BIOLOGICAL_PROCESS)
     df = pd.read_pickle('data/cafa3/swissprot_exp.pkl')
     annots = {}
     for i, row in df.iterrows():
@@ -40,6 +40,8 @@ def compute_performance():
     f = 0.0
     for prot, pred_prot in pred_mapping.iteritems():
         real_annots = annots[prot]
+        if len(real_annots) == 0:
+            continue
         pred_annots = annots[pred_prot]
         tp = len(real_annots.intersection(pred_annots))
         fp = len(pred_annots - real_annots)
