@@ -379,6 +379,16 @@ def model():
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('Inconsistent predictions: %d' % incon)
+    logging.info('Saving the predictions')
+    proteins = test_df['proteins']
+    predictions = list()
+    for i in xrange(preds.shape[0]):
+        predictions.append(preds[i])
+    df = pd.DataFrame(
+        {
+            'proteins': proteins, 'predictions': predictions,
+            'gos': test_df['gos'], 'labels': test_df['labels']})
+    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
     logging.info('Done in %d sec' % (time.time() - start_time))
 
 
