@@ -62,18 +62,18 @@ ind = 0
     default='gpu:0',
     help='GPU or CPU device id')
 @ck.option(
-    '--threshold',
-    default=0.5,
-    help='Threshold for prediction')
-def main(function, device, threshold):
+    '--org',
+    default=None,
+    help='Organism id for filtering test set')
+def main(function, device, org):
     global FUNCTION
     FUNCTION = function
     global GO_ID
     GO_ID = FUNC_DICT[FUNCTION]
     global go
     go = get_gene_ontology('go.obo')
-    global THRESHOLD
-    THRESHOLD = threshold
+    global ORG
+    ORG = org
     func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
     global functions
     functions = func_df['functions'].values
@@ -92,21 +92,25 @@ def main(function, device, threshold):
         model()
 
 
-def load_data(split=0.95):
-    df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
+def load_data(split=0.7):
+    # df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
+    # n = len(df)
+    # index = np.arange(n)
+    # np.random.seed(10)
+    # np.random.shuffle(index)
+    # train_n = int(n * split)
+
+    df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = np.arange(n)
-    np.random.seed(10)
-    np.random.shuffle(index)
-    train_n = int(n * split)
-    # valid_n = int(train_n * 0.8)
-
-    train_df = df.loc[index[:train_n]]
-    valid_df = df.loc[index[train_n:]]
-    test_df = df.loc[index[train_n:]]
-    # print(len(test_df))
-    # test_df = test_df[test_df['orgs'] == '4932']
-    # print(len(test_df))
+    valid_n = int(n * 0.9)
+    train_df = df.loc[index[:valid_n]]
+    valid_df = df.loc[index[valid_n:]]
+    test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
+    if ORG is not None:
+        logging.info('Unfiltered test size: %d' % len(test_df))
+        test_df = test_df[test_df['orgs'] == ORG]
+        logging.info('Filtered test size: %d' % len(test_df))
 
     def reshape(values):
         values = np.hstack(values).reshape(
@@ -368,28 +372,46 @@ def compute_roc(preds, labels):
 
 
 def compute_performance(preds, labels, gos):
-    predictions = (preds > THRESHOLD).astype(np.int32)
-    total = 0
-    f = 0.0
-    p = 0.0
-    r = 0.0
-    for i in range(labels.shape[0]):
-        tp = np.sum(predictions[i, :] * labels[i, :])
-        fp = np.sum(predictions[i, :]) - tp
-        fn = np.sum(labels[i, :]) - tp
-        if tp == 0 and fp == 0 and fn == 0:
-            continue
-        total += 1
-        if tp != 0:
-            precision = tp / (1.0 * (tp + fp))
-            recall = tp / (1.0 * (tp + fn))
-            p += precision
-            r += recall
-            f += 2 * precision * recall / (precision + recall)
-    f /= total
-    r /= total
-    p /= total
-    return f, p, r
+    preds = np.round(preds, 2)
+    f_max = 0
+    p_max = 0
+    r_max = 0
+    for t in xrange(1, 100):
+        threshold = t / 100.0
+        predictions = (preds > threshold).astype(np.int32)
+        total = 0
+        f = 0.0
+        p = 0.0
+        r = 0.0
+        for i in range(labels.shape[0]):
+            tp = np.sum(predictions[i, :] * labels[i, :])
+            fp = np.sum(predictions[i, :]) - tp
+            fn = np.sum(labels[i, :]) - tp
+            all_gos = set()
+            for go_id in gos[i]:
+                if go_id in all_functions:
+                    all_gos |= get_anchestors(go, go_id)
+            all_gos.discard(GO_ID)
+            all_gos -= func_set
+            fn += len(all_gos)
+            if tp == 0 and fp == 0 and fn == 0:
+                continue
+            total += 1
+            if tp != 0:
+                precision = tp / (1.0 * (tp + fp))
+                recall = tp / (1.0 * (tp + fn))
+                p += precision
+                r += recall
+                f += 2 * precision * recall / (precision + recall)
+        f /= total
+        r /= total
+        p /= total
+        if f_max < f:
+            f_max = f
+            p_max = p
+            r_max = r
+            predictions_max = predictions
+    return f_max, p_max, r_max, predictions_max
 
 
 if __name__ == '__main__':

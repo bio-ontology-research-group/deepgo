@@ -285,12 +285,160 @@ def get_results(model):
 
 def get_predictions():
     root = 'data/cafa3/'
+    annots = {}
+    preds = {}
+    go = get_gene_ontology()
     mf = pd.read_pickle(root + 'mf.pkl')
     mf_df = pd.read_pickle(root + 'test-mf-preds.pkl')
+    functions = mf['functions']
+    for i, row in mf_df.iterrows():
+        prot_id = row['proteins']
+        if prot_id not in preds:
+            preds[prot_id] = set()
+        for i in xrange(len(functions)):
+            if row['predictions'][i] == 1:
+                preds[prot_id].add(functions[i])
+        if prot_id not in annots:
+            annots[prot_id] = row['gos']
+
+    cc = pd.read_pickle(root + 'cc.pkl')
+    cc_df = pd.read_pickle(root + 'test-cc-preds.pkl')
+    functions = cc['functions']
+    for i, row in cc_df.iterrows():
+        prot_id = row['proteins']
+        if prot_id not in preds:
+            preds[prot_id] = set()
+        for i in xrange(len(functions)):
+            if row['predictions'][i] == 1:
+                preds[prot_id].add(functions[i])
+        if prot_id not in annots:
+            annots[prot_id] = row['gos']
+
+    bp = pd.read_pickle(root + 'bp.pkl')
+    bp_df = pd.read_pickle(root + 'test-bp-preds.pkl')
+    functions = bp['functions']
+    for i, row in bp_df.iterrows():
+        prot_id = row['proteins']
+        if prot_id not in preds:
+            preds[prot_id] = set()
+        for i in xrange(len(functions)):
+            if row['predictions'][i] == 1:
+                preds[prot_id].add(functions[i])
+        if prot_id not in annots:
+            annots[prot_id] = row['gos']
+
+    # Removing parent classes
+    for prot_id in preds:
+        go_set = preds[prot_id]
+        gos = go_set.copy()
+        for go_id in gos:
+            anchestors = get_anchestors(go, go_id)
+            anchestors.remove(go_id)
+            go_set -= anchestors
+
+    proteins = sorted(annots.keys(), key=lambda x: (
+        x.split('_')[1], x.split('_')[0]))
+    with open(root + 'test_predictions.tab', 'w') as f:
+        for prot_id in proteins:
+            f.write(prot_id)
+            for go_id in preds[prot_id]:
+                f.write('\t' + go_id)
+            f.write('\n')
+
+    with open(root + 'test_annotations.tab', 'w') as f:
+        for prot_id in proteins:
+            f.write(prot_id)
+            for go_id in annots[prot_id]:
+                if go_id in go:
+                    f.write('\t' + go_id)
+            f.write('\n')
+
+
+def specific_predictions():
+    root = 'data/cafa3/'
+    go = get_gene_ontology()
+    fw = open(root + 'test_predictions_specific.tab', 'w')
+    with open(root + 'test_predictions.tab', 'r') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            go_set = set(items[1:])
+            gos = go_set.copy()
+            for go_id in gos:
+                anchestors = get_anchestors(go, go_id)
+                anchestors.remove(go_id)
+                go_set -= anchestors
+            fw.write(items[0])
+            for go_id in go_set:
+                fw.write('\t' + go_id)
+            fw.write('\n')
+    fw.close()
+
+
+def merged_annotations():
+    root = 'data/cafa3/'
+    preds = {}
+    with open(root + 'test_predictions.tab', 'r') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            preds[items[0]] = set(items[1:])
+    fw = open(root + 'test_merged.tab', 'w')
+    with open(root + 'test_annotations.tab', 'r') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            gos = preds[items[0]] | set(items[1:])
+            fw.write(items[0])
+            for go_id in gos:
+                fw.write('\t' + go_id)
+            fw.write('\n')
+    fw.close()
+
+
+def compute_performance():
+    root = 'data/cafa3/'
+    preds = {}
+    annots = {}
+    go = get_gene_ontology()
+    with open(root + 'test_predictions.tab', 'r') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            preds[items[0]] = set(items[1:])
+    with open(root + 'test_annotations.tab', 'r') as f:
+        for line in f:
+            items = line.strip().split('\t')
+            annots[items[0]] = set()
+            for go_id in items[1:]:
+                if go_id in go:
+                    annots[items[0]] |= get_anchestors(go, go_id)
+
+    total = 0
+    p = 0.0
+    r = 0.0
+    f = 0.0
+    for prot, pred_annots in preds.iteritems():
+        real_annots = annots[prot]
+        if len(real_annots) == 0:
+            continue
+        tp = len(real_annots.intersection(pred_annots))
+        fp = len(pred_annots - real_annots)
+        fn = len(real_annots - pred_annots)
+        if tp == 0 and fp == 0 and fn == 0:
+            continue
+        total += 1
+        if tp != 0:
+            precision = tp / (1.0 * (tp + fp))
+            recall = tp / (1.0 * (tp + fn))
+            p += precision
+            r += recall
+            f += 2 * precision * recall / (precision + recall)
+    print(f / total, p / total, r / total)
 
 
 def main(*args, **kwargs):
-    get_results('model_seq')
+    # specific_predictions()
+    merged_annotations()
+    # compute_performance()
+    # get_predictions()
+    # get_results('model_seq')
     # get_data()
     # cafa3()
     # fasta2tabs()

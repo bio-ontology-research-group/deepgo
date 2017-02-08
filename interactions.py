@@ -14,6 +14,7 @@ from utils import (
     CELLULAR_COMPONENT)
 from sklearn.metrics import roc_curve, auc
 from matplotlib import pyplot as plt
+import math
 
 DATA_ROOT = 'data/'
 
@@ -21,9 +22,21 @@ DATA_ROOT = 'data/'
 @ck.command()
 def main():
     scores = load_scores()
-    inters = load_interactions()
-    print(len(scores), len(inters))
-    compute_roc(scores, inters)
+    m = int(math.sqrt(len(scores)))
+    inters, index = load_interactions()
+    n = len(index)
+    print(n)
+    proteins = list(index.keys())
+    new_scores = list()
+    interactions = list()
+    for i in xrange(n):
+        for j in xrange(n):
+            x = index[proteins[i]]
+            y = index[proteins[j]]
+            new_scores.append(scores[m * x + y])
+            interactions.append(inters[m * x + y])
+    print(len(interactions))
+    compute_roc(new_scores, interactions)
 
 
 def get_data():
@@ -48,7 +61,7 @@ def get_data():
 
 def load_scores():
     scores = list()
-    with open('data/cafa3/sim_bma_resnik.txt', 'r') as f:
+    with open('data/cafa3/sim_merged.txt', 'r') as f:
         for line in f:
             line = line.strip()
             scores.append(float(line))
@@ -61,12 +74,25 @@ def load_scores():
     return res
 
 
+def uni2string():
+    df = pd.read_pickle('data/idmapping.9606.pkl')
+    mapping = dict()
+    for i, row in df.iterrows():
+        if isinstance(row['string'], str):
+            mapping[row['proteins']] = row['string']
+    return mapping
+
+
 def load_proteins():
     proteins = list()
-    with open('data/human_predictions.tab') as f:
+    mapping = uni2string()
+    with open('data/cafa3/test_merged_human.tab') as f:
         for line in f:
             it = line.strip().split('\t')
-            proteins.append(it[0])
+            string_id = None
+            if it[0] in mapping:
+                string_id = mapping[it[0]]
+            proteins.append((it[0], string_id))
     return proteins
 
 
@@ -74,8 +100,9 @@ def load_interactions():
     proteins = load_proteins()
     index = {}
     for i, prot in enumerate(proteins):
-        index[prot] = i
-    print(index)
+        prot_id, st_id = prot
+        if st_id:
+            index[st_id] = i
     n = len(proteins)
     inters = np.zeros((n * n, ), dtype='int32')
     with open('data/9606.protein.links.v10.txt') as f:
@@ -89,8 +116,7 @@ def load_interactions():
                 y = index[it[1]]
                 inters[x * n + y] = 1
                 inters[y * n + x] = 1
-    print(np.sum(inters))
-    return inters
+    return inters, index
 
 
 def compute_roc(scores, test):
@@ -108,7 +134,7 @@ def compute_roc(scores, test):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC Curve BMA Resnik Human Predicted')
+    plt.title('ROC Curve BMA Resnik Human Real')
     plt.legend(loc="lower right")
     plt.show()
 
