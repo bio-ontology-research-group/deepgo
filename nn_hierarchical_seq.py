@@ -328,15 +328,15 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data),
-        nb_epoch=nb_epoch,
-        validation_data=valid_generator,
-        nb_val_samples=len(val_data),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
-    save_model_weights(model, last_model_path)
+    # model.fit_generator(
+    #     train_generator,
+    #     samples_per_epoch=len(train_data),
+    #     nb_epoch=nb_epoch,
+    #     validation_data=valid_generator,
+    #     nb_val_samples=len(val_data),
+    #     max_q_size=batch_size,
+    #     callbacks=[checkpointer, earlystopper])
+    # save_model_weights(model, last_model_path)
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
@@ -356,11 +356,21 @@ def model():
                         preds[i, go_indexes[p_id]] < preds[i, j]):
                     incon += 1
                     preds[i, go_indexes[p_id]] = preds[i, j]
-    f, p, r = compute_performance(preds, test_labels, test_gos)
+    f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
-    logging.info('F measure: \t %f %f %f' % (f, p, r))
+    logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('Inconsistent predictions: %d' % incon)
+    logging.info('Saving the predictions')
+    proteins = test_df['proteins']
+    predictions = list()
+    for i in xrange(preds_max.shape[0]):
+        predictions.append(preds_max[i])
+    df = pd.DataFrame(
+        {
+            'proteins': proteins, 'predictions': predictions,
+            'gos': test_df['gos'], 'labels': test_df['labels']})
+    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
     logging.info('Done in %d sec' % (time.time() - start_time))
 
 
