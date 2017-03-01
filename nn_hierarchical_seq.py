@@ -183,7 +183,7 @@ def get_function_node(name, inputs, output_dim):
     output_name = name + '_out'
     merge_name = name + '_con'
     net = Dense(output_dim, activation='relu', name=name)(inputs)
-    output = Dense(1, activation='sigmoid', name=output_name)(net)
+    output = Dense(1, name=output_name)(net)
     net = merge(
         [output, net], mode='concat',
         concat_axis=1, name=merge_name)
@@ -299,8 +299,9 @@ def model():
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
-    output = merge(output_models, mode='concat', concat_axis=1)
-    model = Model(input=inputs, output=output)
+    net = merge(output_models, mode='concat', concat_axis=1)
+    net = Activation('sigmoid')(net)
+    model = Model(input=inputs, output=net)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
@@ -311,7 +312,7 @@ def model():
 
     model.compile(
         optimizer=optimizer,
-        loss='categorical_crossentropy')
+        loss='binary_crossentropy')
 
     pre_model_path = DATA_ROOT + 'pre_model_seq_weights_' + FUNCTION + '.pkl'
     model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
@@ -347,10 +348,8 @@ def model():
 
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data))
-    # for i in xrange(len(preds)):
-    #     preds[i] = preds[i].reshape(-1, 1)
-    # preds = np.concatenate(preds, axis=1)
 
+    logging.info(preds.shape)
     incon = 0
     for i in xrange(len(test_data)):
         for j in xrange(len(functions)):
