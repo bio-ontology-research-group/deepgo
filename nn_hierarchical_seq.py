@@ -347,9 +347,9 @@ def model():
 
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data))
-    for i in xrange(len(preds)):
-        preds[i] = preds[i].reshape(-1, 1)
-    preds = np.concatenate(preds, axis=1)
+    # for i in xrange(len(preds)):
+    #     preds[i] = preds[i].reshape(-1, 1)
+    # preds = np.concatenate(preds, axis=1)
 
     incon = 0
     for i in xrange(len(test_data)):
