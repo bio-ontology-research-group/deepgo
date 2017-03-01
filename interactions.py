@@ -134,7 +134,7 @@ def compute_roc(scores, test):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC Curve BMA Resnik Human Real')
+    plt.title('ROC Curve BMA Resnik Human Merged')
     plt.legend(loc="lower right")
     plt.show()
 

@@ -260,12 +260,13 @@ class DataGenerator(object):
 
     def next(self):
         if self.start < self.size:
-            output = []
-            if self.has_targets:
-                labels = self.targets
-                for i in range(self.num_outputs):
-                    output.append(
-                        labels[self.start:(self.start + self.batch_size), i])
+            # output = []
+            # if self.has_targets:
+            #     labels = self.targets
+            #     for i in range(self.num_outputs):
+            #         output.append(
+            #             labels[self.start:(self.start + self.batch_size), i])
+            labels = self.targets[self.start:(self.start + self.batch_size), :]
             if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
                 res_inputs = []
                 for inp in self.inputs:
@@ -276,7 +277,7 @@ class DataGenerator(object):
                     self.start + self.batch_size)]
             self.start += self.batch_size
             if self.has_targets:
-                return (res_inputs, output)
+                return (res_inputs, labels)
             return res_inputs
         else:
             self.reset()

@@ -435,9 +435,9 @@ def compute_performance():
 
 def main(*args, **kwargs):
     # specific_predictions()
+    get_predictions()
     merged_annotations()
     # compute_performance()
-    # get_predictions()
     # get_results('model_seq')
     # get_data()
     # cafa3()

@@ -299,7 +299,8 @@ def model():
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
-    model = Model(input=inputs, output=output_models)
+    output = merge(output_models, mode='concat', concat_axis=1)
+    model = Model(input=inputs, output=output)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
@@ -310,16 +311,20 @@ def model():
 
     model.compile(
         optimizer=optimizer,
-        loss='binary_crossentropy')
+        loss='categorical_crossentropy')
 
+    pre_model_path = DATA_ROOT + 'pre_model_seq_weights_' + FUNCTION + '.pkl'
     model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
-    last_model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.last.pkl'
     checkpointer = MyCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True, save_weights_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))
+
+    logging.info('Loading pretrained weights')
+    load_model_weights(model, pre_model_path)
+
     logging.info('Starting training the model')
 
     train_generator = DataGenerator(batch_size, nb_classes)
@@ -328,15 +333,14 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    # model.fit_generator(
-    #     train_generator,
-    #     samples_per_epoch=len(train_data),
-    #     nb_epoch=nb_epoch,
-    #     validation_data=valid_generator,
-    #     nb_val_samples=len(val_data),
-    #     max_q_size=batch_size,
-    #     callbacks=[checkpointer, earlystopper])
-    # save_model_weights(model, last_model_path)
+    model.fit_generator(
+        train_generator,
+        samples_per_epoch=len(train_data),
+        nb_epoch=nb_epoch,
+        validation_data=valid_generator,
+        nb_val_samples=len(val_data),
+        max_q_size=batch_size,
+        callbacks=[checkpointer, earlystopper])
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
