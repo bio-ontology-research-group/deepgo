@@ -33,7 +33,7 @@ def main(function, annot_num):
     functions = deque()
     dfs(GO_ID)
     functions.remove(GO_ID)
-    functions.reverse()
+    # functions.reverse()
     functions = list(functions)
     print(len(functions))
     global func_set

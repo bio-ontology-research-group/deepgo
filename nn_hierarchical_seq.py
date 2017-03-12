@@ -140,14 +140,13 @@ def get_feature_model():
         embedding_dims,
         input_length=MAXLEN,
         dropout=0.2))
-    # model.add(LSTM(128, activation='relu'))
     model.add(Convolution1D(
-        nb_filter=32,
-        filter_length=128,
+        nb_filter=16,
+        filter_length=64,
         border_mode='valid',
         activation='relu',
         subsample_length=1))
-    model.add(MaxPooling1D(pool_length=64, stride=32))
+    model.add(MaxPooling1D(pool_length=32, stride=16))
     model.add(Flatten())
     return model
 
@@ -179,22 +178,16 @@ def get_node_name(go_id, unique=False):
     return name
 
 
-def get_function_node(name, inputs, output_dim):
+def get_function_node(name, inputs):
     output_name = name + '_out'
-    merge_name = name + '_con'
-    net = Dense(output_dim, activation='relu', name=name)(inputs)
-    output = Dense(1, name=output_name)(net)
-    net = merge(
-        [output, net], mode='concat',
-        concat_axis=1, name=merge_name)
+    net = Dense(128, name=name, activation='relu')(inputs)
+    output = Dense(1, name=output_name, activation='sigmoid')(net)
     return net, output
 
 
 def get_layers_recursive(inputs, node_output_dim=256):
     layers = dict()
     name = get_node_name(GO_ID)
-    inputs = Dense(
-        node_output_dim, activation='relu', name=name)(inputs)
 
     def dfs(node_id, inputs):
         name = get_node_name(node_id, unique=True)
@@ -240,39 +233,27 @@ def get_layers(inputs, node_output_dim=256):
     layers[GO_ID] = {'net': inputs}
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
-            q.append((node_id, inputs))
+            q.append(node_id)
     while len(q) > 0:
-        node_id, net = q.popleft()
-        parent_nets = [inputs]
-        for p_id in get_parents(go, node_id):
-            if p_id in func_set:
-                parent_nets.append(layers[p_id]['net'])
-        if len(parent_nets) > 1:
-            name = get_node_name(node_id) + '_parents'
-            net = merge(
-                parent_nets, mode='concat', concat_axis=1, name=name)
+        node_id = q.popleft()
         name = get_node_name(node_id)
-        net, output = get_function_node(name, net, node_output_dim)
+        net, output = get_function_node(name, inputs)
         if node_id not in layers:
-            layers[node_id] = {'net': net, 'output': output}
+            layers[node_id] = {'output': output}
             for n_id in go[node_id]['children']:
-                if n_id in func_set and n_id not in layers:
-                    ok = True
-                    for p_id in get_parents(go, n_id):
-                        if p_id in func_set and p_id not in layers:
-                            ok = False
-                    if ok:
-                        q.append((n_id, net))
+                if n_id not in layers:
+                    q.append(n_id)
 
-    # for node_id in functions:
-    #     childs = get_go_set(go, node_id).intersection(func_set)
-    #     if len(childs) > 0:
-    #         outputs = [layers[node_id]['output']]
-    #         for ch_id in childs:
-    #             outputs.append(layers[ch_id]['output'])
-    #         name = get_node_name(node_id) + '_max'
-    #         layers[node_id]['output'] = merge(
-    #             outputs, mode='max', name=name)
+    for node_id in functions:
+        # childs = get_go_set(go, node_id).intersection(func_set)
+        childs = set(go[node_id]['children']).intersection(func_set)
+        if len(childs) > 0:
+            outputs = [layers[node_id]['output']]
+            for ch_id in childs:
+                outputs.append(layers[ch_id]['output'])
+            name = get_node_name(node_id) + '_max'
+            layers[node_id]['output'] = merge(
+                outputs, mode='max', name=name)
     return layers
 
 
@@ -300,7 +281,9 @@ def model():
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
     net = merge(output_models, mode='concat', concat_axis=1)
-    net = Activation('sigmoid')(net)
+    # net = Dense(nb_classes * 2, activation='relu')(feature_model)
+    # net = Dense(nb_classes, activation='sigmoid')(net)
+    # net = Activation('sigmoid')(net)
     model = Model(input=inputs, output=net)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
@@ -323,8 +306,8 @@ def model():
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))
 
-    logging.info('Loading pretrained weights')
-    load_model_weights(model, pre_model_path)
+    # logging.info('Loading pretrained weights')
+    # load_model_weights(model, pre_model_path)
 
     logging.info('Starting training the model')
 
@@ -334,14 +317,14 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data),
-        nb_epoch=nb_epoch,
-        validation_data=valid_generator,
-        nb_val_samples=len(val_data),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
+    # model.fit_generator(
+    #     train_generator,
+    #     samples_per_epoch=len(train_data),
+    #     nb_epoch=nb_epoch,
+    #     validation_data=valid_generator,
+    #     nb_val_samples=len(val_data),
+    #     max_q_size=batch_size,
+    #     callbacks=[checkpointer, earlystopper])
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
@@ -353,12 +336,14 @@ def model():
     incon = 0
     for i in xrange(len(test_data)):
         for j in xrange(len(functions)):
-            anchestors = get_anchestors(go, functions[j])
-            for p_id in anchestors:
-                if (p_id not in [GO_ID, functions[j]] and
-                        preds[i, go_indexes[p_id]] < preds[i, j]):
-                    incon += 1
-                    preds[i, go_indexes[p_id]] = preds[i, j]
+            childs = set(go[functions[j]]['children']).intersection(func_set)
+            ok = True
+            for n_id in childs:
+                if preds[i, j] < preds[i, go_indexes[n_id]]:
+                    preds[i, j] = preds[i, go_indexes[n_id]]
+                    ok = False
+            if not ok:
+                incon += 1
     f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
