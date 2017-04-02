@@ -11,21 +11,21 @@ from utils import (
 from aaindex import is_ok
 import click as ck
 
-DATA_ROOT = 'data/cafa3/'
+DATA_ROOT = 'data/swissexp/'
 
 
 @ck.command()
 @ck.option(
-    '--data',
-    default='data',
-    help='Basename of data pickle file')
-@ck.option(
     '--function',
     default='mf',
     help='Function (mf, bp, cc)')
-def main(data, function):
-    global DATA
-    DATA = data
+@ck.option(
+    '--split',
+    default=0.8,
+    help='Train test split')
+def main(function, split):
+    global SPLIT
+    SPLIT = split
     global GO_ID
     GO_ID = FUNC_DICT[function]
     global go
@@ -57,7 +57,9 @@ def load_data():
     gos = list()
     labels = list()
     ngrams = list()
-    df = pd.read_pickle(DATA_ROOT + DATA + '.pkl')
+    sequences = list()
+    accessions = list()
+    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
     # Filtering data by sequences
     index = list()
     for i, row in df.iterrows():
@@ -81,7 +83,9 @@ def load_data():
         go_set.remove(GO_ID)
         gos.append(go_list)
         proteins.append(row['proteins'])
+        accessions.append(row['accessions'])
         seq = row['sequences']
+        sequences.append(seq)
         grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
         for i in xrange(len(seq) - gram_len + 1):
             grams[i] = vocab[seq[i: (i + gram_len)]]
@@ -92,10 +96,12 @@ def load_data():
                 label[go_indexes[go_id]] = 1
         labels.append(label)
     res_df = pd.DataFrame({
+        'accessions': accessions,
         'proteins': proteins,
         'ngrams': ngrams,
         'labels': labels,
-        'gos': gos})
+        'gos': gos,
+        'sequences': sequences})
     print(len(res_df))
     return res_df
 
@@ -115,14 +121,21 @@ def run(*args, **kwargs):
     org_df = load_org_df()
     rep_df = load_rep_df()
     df = pd.merge(df, org_df, on='proteins', how='left')
-    df = pd.merge(df, rep_df, on='proteins', how='left')
+    df = pd.merge(df, rep_df, on='accessions', how='left')
     missing_rep = 0
     for i, row in df.iterrows():
         if not isinstance(row['embeddings'], np.ndarray):
             row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
-    print(missing_rep)
-    df.to_pickle(DATA_ROOT + DATA + '-' + FUNCTION + '.pkl')
+    print('Missing network reps:', missing_rep)
+    index = df.index.values
+    np.random.seed(seed=0)
+    np.random.shuffle(index)
+    train_n = int(len(df) * SPLIT)
+    train_df = df.loc[index[:train_n]]
+    test_df = df.loc[index[train_n:]]
+    train_df.to_pickle(DATA_ROOT + 'train-' + FUNCTION + '.pkl')
+    test_df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '.pkl')
 
 
 if __name__ == '__main__':

@@ -2,50 +2,55 @@
 from __future__ import print_function
 import click as ck
 import pandas as pd
+import numpy as np
 from utils import (
     BIOLOGICAL_PROCESS, MOLECULAR_FUNCTION, CELLULAR_COMPONENT,
     EXP_CODES, get_anchestors, get_gene_ontology, get_go_set)
 
+DATA_ROOT = 'data/swissexp/'
 
 @ck.command()
 def main():
-    f, p, r = compute_performance()
+
+    # convert()
+    f, p, r = compute_performance('mf')
+    print(f, p, r)
+    f, p, r = compute_performance('cc')
+    print(f, p, r)
+    f, p, r = compute_performance('bp')
     print(f, p, r)
 
 
-def compute_performance():
+def compute_performance(func):
     go = get_gene_ontology()
     go_set = get_go_set(go, BIOLOGICAL_PROCESS)
-    df = pd.read_pickle('data/cafa3/swissprot_exp.pkl')
-    annots = {}
-    for i, row in df.iterrows():
-        annots[row['proteins']] = set()
-        for go_id in row['annots']:
-            go_id = go_id.split('|')
-            if go_id[1] in EXP_CODES and go_id[0] in go_set:
-                annots[row['proteins']] |= get_anchestors(go, go_id[0])
+    train_df = pd.read_pickle('data/swissexp/train-' + func + '.pkl')
+    test_df = pd.read_pickle('data/swissexp/test-' + func + '.pkl')
 
-        annots[row['proteins']].discard(BIOLOGICAL_PROCESS)
-        annots[row['proteins']].discard(MOLECULAR_FUNCTION)
-        annots[row['proteins']].discard(CELLULAR_COMPONENT)
+    train_labels = {}
+    test_labels = {}
+    for i, row in train_df.iterrows():
+        train_labels[row['proteins']] = row['labels']
 
-    pred_mapping = dict()
-    with open('data/blast_uniq.tab') as f:
+    for i, row in test_df.iterrows():
+        test_labels[row['proteins']] = row['labels']
+
+    preds = list()
+    test = list()
+    with open('data/swissexp/blast-' + func + '.res') as f:
         for line in f:
-            items = line.strip().split('\t')
-            pred_mapping[items[0]] = items[1]
+            it = line.strip().split('\t')
+            preds.append(train_labels[it[1]])
+            test.append(test_labels[it[0]])
+
     total = 0
     p = 0.0
     r = 0.0
     f = 0.0
-    for prot, pred_prot in pred_mapping.iteritems():
-        real_annots = annots[prot]
-        if len(real_annots) == 0:
-            continue
-        pred_annots = annots[pred_prot]
-        tp = len(real_annots.intersection(pred_annots))
-        fp = len(pred_annots - real_annots)
-        fn = len(real_annots - pred_annots)
+    for label, pred in zip(test, preds):
+        tp = np.sum(label * pred)
+        fp = np.sum(pred) - tp
+        fn = np.sum(label) - tp
         if tp == 0 and fp == 0 and fn == 0:
             continue
         total += 1
@@ -59,8 +64,8 @@ def compute_performance():
 
 
 def convert():
-    df = pd.read_pickle('data/cafa3/train.pkl')
-    with open('data/cafa3/train.fa', 'w') as f:
+    df = pd.read_pickle(DATA_ROOT + 'train-bp.pkl')
+    with open(DATA_ROOT + 'train-bp.fa', 'w') as f:
         for i, row in df.iterrows():
             f.write('>' + row['proteins'] + '\n')
             f.write(to_fasta(str(row['sequences'])))

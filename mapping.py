@@ -8,12 +8,13 @@ import os
 import requests
 
 
+DATA_ROOT = 'data/swissexp/'
 def to_pickle():
     prots = set()
     proteins = list()
     accessions = list()
     sequences = list()
-    with open('data/cafa3/uniprot_sprot.tab') as f:
+    with open(DATA_ROOT + 'uniprot_sprot.tab') as f:
         for line in f:
             items = line.strip().split('\t')
             ids = items[0].split('|')
@@ -22,49 +23,49 @@ def to_pickle():
             accessions.append(ids[1])
             sequences.append(items[1])
 
-    with open('data/cafa3/tremble_data.tab') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            if items[0] not in prots:
-                prots.add(items[0])
-                proteins.append(items[0])
-                accessions.append(items[1])
-                sequences.append(items[2])
+    # with open('data/cafa3/tremble_data.tab') as f:
+    #     for line in f:
+    #         items = line.strip().split('\t')
+    #         if items[0] not in prots:
+    #             prots.add(items[0])
+    #             proteins.append(items[0])
+    #             accessions.append(items[1])
+    #             sequences.append(items[2])
 
-    with open('data/cafa3/uniprot_trembl.tab') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            if items[1] not in prots:
-                proteins.append(items[1])
-                accessions.append(items[0])
-                sequences.append(items[2])
+    # with open('data/cafa3/uniprot_trembl.tab') as f:
+    #     for line in f:
+    #         items = line.strip().split('\t')
+    #         if items[1] not in prots:
+    #             proteins.append(items[1])
+    #             accessions.append(items[0])
+    #             sequences.append(items[2])
     seq_df = pd.DataFrame({
         'proteins': proteins,
         'accessions': accessions,
         'sequences': sequences
     })
     annots_dict = dict()
-    with open('data/cafa3/swissprot.tab') as f:
+    with open(DATA_ROOT + 'swissprot.tab') as f:
         for line in f:
             items = line.strip().split('\t')
             accessions = items[1].split(';')
             annots_dict[items[0]] = set(items[2:])
 
-    with open('data/cafa3/tremble_data.tab') as f:
-        for line in f:
-            items = line.strip().split('\t')
-            prot_id = items[0]
-            if prot_id in annots_dict:
-                annots_dict[prot_id] |= set(items[3].split('; '))
-            else:
-                annots_dict[prot_id] = set(items[3].split('; '))
-    goa_df = pd.read_pickle('data/cafa3/goa_annots.pkl')
-    for i, row in goa_df.iterrows():
-        prot_id = row['proteins']
-        if prot_id in annots_dict:
-            annots_dict[prot_id] |= set(row['annots'])
-        else:
-            annots_dict[prot_id] = set(row['annots'])
+    # with open('data/cafa3/tremble_data.tab') as f:
+    #     for line in f:
+    #         items = line.strip().split('\t')
+    #         prot_id = items[0]
+    #         if prot_id in annots_dict:
+    #             annots_dict[prot_id] |= set(items[3].split('; '))
+    #         else:
+    #             annots_dict[prot_id] = set(items[3].split('; '))
+    # goa_df = pd.read_pickle('data/cafa3/goa_annots.pkl')
+    # for i, row in goa_df.iterrows():
+    #     prot_id = row['proteins']
+    #     if prot_id in annots_dict:
+    #         annots_dict[prot_id] |= set(row['annots'])
+    #     else:
+    #         annots_dict[prot_id] = set(row['annots'])
     proteins = list()
     annots = list()
     for prot, gos in annots_dict.iteritems():
@@ -76,7 +77,7 @@ def to_pickle():
     })
     df = pd.merge(seq_df, annots_df, on='proteins')
     print(len(df))
-    df.to_pickle('data/cafa3/swissprot.pkl')
+    df.to_pickle(DATA_ROOT + 'swissprot.pkl')
 
 
 def goa_pickle():
@@ -123,7 +124,7 @@ def goa_pickle():
 
 
 def filter_exp():
-    df = pd.read_pickle('data/cafa3/swissprot.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'swissprot.pkl')
     exp_codes = set(['EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'TAS', 'IC'])
     index = list()
     for row in df.iterrows():
@@ -137,7 +138,7 @@ def filter_exp():
             index.append(row[0])
     df = df.loc[index]
     print(len(df))
-    df.to_pickle('data/cafa3/swissprot_exp.pkl')
+    df.to_pickle(DATA_ROOT + 'swissprot_exp.pkl')
 
 
 def string_uni():
@@ -157,33 +158,25 @@ def string_uni():
             it = line.strip().split('\t')
             mapping[it[1].upper()[:-1]] = it[0]
 
-    prots = dict()
-    with open('data/uni_uni.dat') as f:
-        for line in f:
-            it = line.strip().split('\t')
-            prots[it[0]] = it[1]
+    # prots = dict()
+    # with open('data/uni_uni.dat') as f:
+    #     for line in f:
+    #         it = line.strip().split('\t')
+    #         prots[it[0]] = it[1]
 
-    embeds = list()
-    accessions = list()
-    proteins = list()
-    string = list()
+    embeds = dict()
     with open('data/graph_reps.tab') as f:
         for line in f:
             it = line.strip().split('\t')
             st_id = it[0].upper()
             if st_id in mapping:
                 ac_id = mapping[st_id]
-                if ac_id in prots:
-                    accessions.append(ac_id)
-                    proteins.append(prots[ac_id])
-                    rep = np.array(map(float, it[1:]), dtype='float32')
-                    embeds.append(rep)
-                    string.append(it[0])
+                embeds[ac_id] = np.array(
+                    map(float, it[1:]), dtype='float32')
+
     df = pd.DataFrame({
-        'accessions': accessions,
-        'proteins': proteins,
-        'embeddings': embeds,
-        'string': string})
+        'accessions': embeds.keys(),
+        'embeddings': embeds.values()})
     print(len(df))
     df.to_pickle('data/graph_embeddings.pkl')
 
@@ -398,10 +391,11 @@ def merge_trembl():
 
 
 def main():
+    string_uni()
     # human_go_annotations()
     # predictions('9606')
     # to_pickle()
-    filter_exp()
+    # filter_exp()
     # goa_pickle()
     # download_prots()
     # merge_trembl()

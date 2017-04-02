@@ -10,7 +10,7 @@ from collections import deque
 from aaindex import is_ok
 
 
-DATA_ROOT = 'data/cafa3/'
+DATA_ROOT = 'data/swissexp/'
 
 
 @ck.command()

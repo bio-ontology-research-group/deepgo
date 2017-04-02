@@ -46,7 +46,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/cafa3/'
+DATA_ROOT = 'data/swissexp/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -93,17 +93,10 @@ def main(function, device, org):
 
 
 def load_data(split=0.7):
-    # df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
-    # n = len(df)
-    # index = np.arange(n)
-    # np.random.seed(10)
-    # np.random.shuffle(index)
-    # train_n = int(n * split)
-
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = np.arange(n)
-    valid_n = int(n * 0.9)
+    valid_n = int(n * 0.8)
     train_df = df.loc[index[:valid_n]]
     valid_df = df.loc[index[valid_n:]]
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
@@ -180,7 +173,7 @@ def get_node_name(go_id, unique=False):
 
 def get_function_node(name, inputs):
     output_name = name + '_out'
-    net = Dense(128, name=name, activation='relu')(inputs)
+    net = Dense(256, name=name, activation='relu')(inputs)
     output = Dense(1, name=output_name, activation='sigmoid')(net)
     return net, output
 
@@ -226,23 +219,36 @@ def get_layers_recursive(inputs, node_output_dim=256):
     return layers
 
 
-def get_layers(inputs, node_output_dim=256):
+def get_layers(inputs):
     q = deque()
     layers = {}
     name = get_node_name(GO_ID)
     layers[GO_ID] = {'net': inputs}
     for node_id in go[GO_ID]['children']:
         if node_id in func_set:
-            q.append(node_id)
+            q.append((node_id, inputs))
     while len(q) > 0:
-        node_id = q.popleft()
+        node_id, net = q.popleft()
+        parent_nets = [inputs]
+        for p_id in get_parents(go, node_id):
+            if p_id in func_set:
+                parent_nets.append(layers[p_id]['net'])
+        if len(parent_nets) > 1:
+            name = get_node_name(node_id) + '_parents'
+            net = merge(
+                parent_nets, mode='concat', concat_axis=1, name=name)
         name = get_node_name(node_id)
-        net, output = get_function_node(name, inputs)
+        net, output = get_function_node(name, net)
         if node_id not in layers:
-            layers[node_id] = {'output': output}
+            layers[node_id] = {'net': net, 'output': output}
             for n_id in go[node_id]['children']:
-                if n_id not in layers:
-                    q.append(n_id)
+                if n_id in func_set and n_id not in layers:
+                    ok = True
+                    for p_id in get_parents(go, n_id):
+                        if p_id in func_set and p_id not in layers:
+                            ok = False
+                    if ok:
+                        q.append((n_id, net))
 
     for node_id in functions:
         # childs = get_go_set(go, node_id).intersection(func_set)
@@ -317,14 +323,14 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    # model.fit_generator(
-    #     train_generator,
-    #     samples_per_epoch=len(train_data),
-    #     nb_epoch=nb_epoch,
-    #     validation_data=valid_generator,
-    #     nb_val_samples=len(val_data),
-    #     max_q_size=batch_size,
-    #     callbacks=[checkpointer, earlystopper])
+    model.fit_generator(
+        train_generator,
+        samples_per_epoch=len(train_data),
+        nb_epoch=nb_epoch,
+        validation_data=valid_generator,
+        nb_val_samples=len(val_data),
+        max_q_size=batch_size,
+        callbacks=[checkpointer, earlystopper])
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)

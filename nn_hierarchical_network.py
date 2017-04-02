@@ -46,7 +46,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/cafa3/'
+DATA_ROOT = 'data/swissexp/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -94,18 +94,12 @@ def main(function, device, org):
         model()
 
 
-def load_data(split=0.7):
-    # df = pd.read_pickle(DATA_ROOT + 'data' + '-' + FUNCTION + '.pkl')
-    # n = len(df)
-    # index = np.arange(n)
-    # np.random.seed(10)
-    # np.random.shuffle(index)
-    # train_n = int(n * split)
+def load_data():
 
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
-    index = np.arange(n)
-    valid_n = int(n * 0.9)
+    index = df.index.values
+    valid_n = int(n * 0.8)
     train_df = df.loc[index[:valid_n]]
     valid_df = df.loc[index[valid_n:]]
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
@@ -127,6 +121,7 @@ def load_data(split=0.7):
         return values - mn
 
     def get_values(data_frame):
+        print(data_frame['labels'].values.shape)
         labels = reshape(data_frame['labels'].values)
         ngrams = sequence.pad_sequences(
             data_frame['ngrams'].values, maxlen=MAXLEN)
@@ -190,14 +185,10 @@ def get_node_name(go_id, unique=False):
     return name
 
 
-def get_function_node(name, inputs, output_dim):
+def get_function_node(name, inputs):
     output_name = name + '_out'
-    merge_name = name + '_con'
-    net = Dense(output_dim, activation='relu', name=name)(inputs)
-    output = Dense(1, activation='sigmoid', name=output_name)(net)
-    net = merge(
-        [output, net], mode='concat',
-        concat_axis=1, name=merge_name)
+    net = Dense(256, name=name, activation='relu')(inputs)
+    output = Dense(1, name=output_name, activation='sigmoid')(net)
     return net, output
 
 
@@ -244,7 +235,7 @@ def get_layers_recursive(inputs, node_output_dim=256):
     return layers
 
 
-def get_layers(inputs, node_output_dim=256):
+def get_layers(inputs):
     q = deque()
     layers = {}
     name = get_node_name(GO_ID)
@@ -263,7 +254,7 @@ def get_layers(inputs, node_output_dim=256):
             net = merge(
                 parent_nets, mode='concat', concat_axis=1, name=name)
         name = get_node_name(node_id)
-        net, output = get_function_node(name, net, node_output_dim)
+        net, output = get_function_node(name, net)
         if node_id not in layers:
             layers[node_id] = {'net': net, 'output': output}
             for n_id in go[node_id]['children']:
@@ -275,16 +266,15 @@ def get_layers(inputs, node_output_dim=256):
                     if ok:
                         q.append((n_id, net))
 
-    for node_id in functions:
-        # childs = get_go_set(go, node_id).intersection(func_set)
-        childs = go[node_id]['children']
-        if len(childs) > 0:
-            outputs = [layers[node_id]['output']]
-            for ch_id in childs:
-                outputs.append(layers[ch_id]['output'])
-            name = get_node_name(node_id) + '_max'
-            layers[node_id]['output'] = merge(
-                outputs, mode='max', name=name)
+    # for node_id in functions:
+    #     childs = set(go[node_id]['children']).intersection(func_set)
+    #     if len(childs) > 0:
+    #         outputs = [layers[node_id]['output']]
+    #         for ch_id in childs:
+    #             outputs.append(layers[ch_id]['output'])
+    #         name = get_node_name(node_id) + '_max'
+    #         layers[node_id]['output'] = merge(
+    #             outputs, mode='max', name=name)
     return layers
 
 
@@ -316,7 +306,8 @@ def model():
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
-    model = Model(input=[inputs, inputs2], output=output_models)
+    net = merge(output_models, mode='concat', concat_axis=1)
+    model = Model(input=[inputs, inputs2], output=net)
     logging.info('Model built in %d sec' % (time.time() - start_time))
     logging.info('Saving the model')
     model_json = model.to_json()
@@ -328,7 +319,7 @@ def model():
     model.compile(
         optimizer=optimizer,
         loss='binary_crossentropy')
-
+    pre_model_path = DATA_ROOT + 'pre_model_weights_' + FUNCTION + '.pkl'
     model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.pkl'
     last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.last.pkl'
     checkpointer = MyCheckpoint(
@@ -337,6 +328,10 @@ def model():
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))
+
+    # logging.info('Loading pretrained weights')
+    # load_model_weights(model, pre_model_path)
+
     logging.info('Starting training the model')
 
     train_generator = DataGenerator(batch_size, nb_classes)
@@ -353,28 +348,24 @@ def model():
         nb_val_samples=len(val_data[0]),
         max_q_size=batch_size,
         callbacks=[checkpointer, earlystopper])
-    save_model_weights(model, last_model_path)
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
 
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data[0]))
-    for i in xrange(len(preds)):
-        preds[i] = preds[i].reshape(-1, 1)
-    preds = np.concatenate(preds, axis=1)
-
+    logging.info(preds.shape)
     incon = 0
-    for i in xrange(len(test_data[0])):
+    for i in xrange(len(test_data)):
         for j in xrange(len(functions)):
-            anchestors = get_anchestors(go, functions[j])
-            for p_id in anchestors:
-                if (p_id not in [GO_ID, functions[j]] and
-                        preds[i, go_indexes[p_id]] < preds[i, j]):
-                    incon += 1
-                    preds[i, go_indexes[p_id]] = preds[i, j]
-    # f, p, r = compute_similarity_performance(train_df, test_df, preds)
-    # logging.info('F measure cosine: \t %f %f %f' % (f, p, r))
+            childs = set(go[functions[j]]['children']).intersection(func_set)
+            ok = True
+            for n_id in childs:
+                if preds[i, j] < preds[i, go_indexes[n_id]]:
+                    preds[i, j] = preds[i, go_indexes[n_id]]
+                    ok = False
+            if not ok:
+                incon += 1
     f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
