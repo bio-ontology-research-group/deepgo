@@ -97,8 +97,8 @@ def load_data(split=0.7):
     n = len(df)
     index = np.arange(n)
     valid_n = int(n * 0.8)
-    train_df = df.loc[index[:valid_n]]
-    valid_df = df.loc[index[valid_n:]]
+    train_df = df.iloc[index[:valid_n]]
+    valid_df = df.iloc[index[valid_n:]]
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
     if ORG is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
@@ -251,7 +251,6 @@ def get_layers(inputs):
                         q.append((n_id, net))
 
     for node_id in functions:
-        # childs = get_go_set(go, node_id).intersection(func_set)
         childs = set(go[node_id]['children']).intersection(func_set)
         if len(childs) > 0:
             outputs = [layers[node_id]['output']]
@@ -323,14 +322,14 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data),
-        nb_epoch=nb_epoch,
-        validation_data=valid_generator,
-        nb_val_samples=len(val_data),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
+    # model.fit_generator(
+    #     train_generator,
+    #     samples_per_epoch=len(train_data),
+    #     nb_epoch=nb_epoch,
+    #     validation_data=valid_generator,
+    #     nb_val_samples=len(val_data),
+    #     max_q_size=batch_size,
+    #     callbacks=[checkpointer, earlystopper])
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)

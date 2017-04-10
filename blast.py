@@ -30,10 +30,18 @@ def compute_performance(func):
     train_labels = {}
     test_labels = {}
     for i, row in train_df.iterrows():
-        train_labels[row['proteins']] = row['labels']
+        go_set = set()
+        for go_id in row['gos']:
+            if go_id in go:
+                go_set |= get_anchestors(go, go_id)
+        train_labels[row['proteins']] = go_set
 
     for i, row in test_df.iterrows():
-        test_labels[row['proteins']] = row['labels']
+        go_set = set()
+        for go_id in row['gos']:
+            if go_id in go:
+                go_set |= get_anchestors(go, go_id)
+        test_labels[row['proteins']] = go_set
 
     preds = list()
     test = list()
@@ -48,9 +56,13 @@ def compute_performance(func):
     r = 0.0
     f = 0.0
     for label, pred in zip(test, preds):
-        tp = np.sum(label * pred)
-        fp = np.sum(pred) - tp
-        fn = np.sum(label) - tp
+        # tp = np.sum(label * pred)
+        # fp = np.sum(pred) - tp
+        # fn = np.sum(label) - tp
+        tp = len(label.intersection(pred))
+        fp = len(pred) - tp
+        fn = len(label) - tp
+
         if tp == 0 and fp == 0 and fn == 0:
             continue
         total += 1

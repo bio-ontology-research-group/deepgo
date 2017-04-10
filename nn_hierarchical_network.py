@@ -146,7 +146,6 @@ def get_feature_model():
         embedding_dims,
         input_length=MAXLEN,
         dropout=0.2))
-    # model.add(LSTM(128, activation='relu'))
     model.add(Convolution1D(
         nb_filter=32,
         filter_length=128,
@@ -266,15 +265,15 @@ def get_layers(inputs):
                     if ok:
                         q.append((n_id, net))
 
-    # for node_id in functions:
-    #     childs = set(go[node_id]['children']).intersection(func_set)
-    #     if len(childs) > 0:
-    #         outputs = [layers[node_id]['output']]
-    #         for ch_id in childs:
-    #             outputs.append(layers[ch_id]['output'])
-    #         name = get_node_name(node_id) + '_max'
-    #         layers[node_id]['output'] = merge(
-    #             outputs, mode='max', name=name)
+    for node_id in functions:
+        childs = set(go[node_id]['children']).intersection(func_set)
+        if len(childs) > 0:
+            outputs = [layers[node_id]['output']]
+            for ch_id in childs:
+                outputs.append(layers[ch_id]['output'])
+            name = get_node_name(node_id) + '_max'
+            layers[node_id]['output'] = merge(
+                outputs, mode='max', name=name)
     return layers
 
 
@@ -340,14 +339,14 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    model.fit_generator(
-        train_generator,
-        samples_per_epoch=len(train_data[0]),
-        nb_epoch=nb_epoch,
-        validation_data=valid_generator,
-        nb_val_samples=len(val_data[0]),
-        max_q_size=batch_size,
-        callbacks=[checkpointer, earlystopper])
+    # model.fit_generator(
+    #     train_generator,
+    #     samples_per_epoch=len(train_data[0]),
+    #     nb_epoch=nb_epoch,
+    #     validation_data=valid_generator,
+    #     nb_val_samples=len(val_data[0]),
+    #     max_q_size=batch_size,
+    #     callbacks=[checkpointer, earlystopper])
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
@@ -356,16 +355,16 @@ def model():
         test_generator, val_samples=len(test_data[0]))
     logging.info(preds.shape)
     incon = 0
-    for i in xrange(len(test_data)):
-        for j in xrange(len(functions)):
-            childs = set(go[functions[j]]['children']).intersection(func_set)
-            ok = True
-            for n_id in childs:
-                if preds[i, j] < preds[i, go_indexes[n_id]]:
-                    preds[i, j] = preds[i, go_indexes[n_id]]
-                    ok = False
-            if not ok:
-                incon += 1
+    # for i in xrange(len(test_data)):
+    #     for j in xrange(len(functions)):
+    #         childs = set(go[functions[j]]['children']).intersection(func_set)
+    #         ok = True
+    #         for n_id in childs:
+    #             if preds[i, j] < preds[i, go_indexes[n_id]]:
+    #                 preds[i, j] = preds[i, go_indexes[n_id]]
+    #                 ok = False
+    #         if not ok:
+    #             incon += 1
     f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))

@@ -6,6 +6,7 @@ import numpy as np
 from utils import EXP_CODES, get_gene_ontology
 import os
 import requests
+from aaindex import is_ok
 
 
 DATA_ROOT = 'data/swissexp/'
@@ -127,15 +128,15 @@ def filter_exp():
     df = pd.read_pickle(DATA_ROOT + 'swissprot.pkl')
     exp_codes = set(['EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'TAS', 'IC'])
     index = list()
-    for row in df.iterrows():
+    for i, row in df.iterrows():
         ok = False
-        for go_id in row[1]['annots']:
+        for go_id in row['annots']:
             code = go_id.split('|')[1]
             if code in exp_codes:
                 ok = True
                 break
-        if ok:
-            index.append(row[0])
+        if ok and is_ok(row['sequences']):
+            index.append(i)
     df = df.loc[index]
     print(len(df))
     df.to_pickle(DATA_ROOT + 'swissprot_exp.pkl')
@@ -391,11 +392,11 @@ def merge_trembl():
 
 
 def main():
-    string_uni()
+    # string_uni()
     # human_go_annotations()
     # predictions('9606')
     # to_pickle()
-    # filter_exp()
+    filter_exp()
     # goa_pickle()
     # download_prots()
     # merge_trembl()
