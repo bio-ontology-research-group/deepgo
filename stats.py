@@ -12,20 +12,34 @@ from utils import (
 
 
 DATA_ROOT = 'data/swissexp/'
+
+
 @ck.command()
 def main():
-    go = get_gene_ontology('go.obo')
-    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
-    funcs = get_go_set(go, CELLULAR_COMPONENT)
-    go_set = set()
+    df = pd.read_pickle(DATA_ROOT + 'test-bp.pkl')
+    orgs = set(df['orgs'])
+    df = pd.read_pickle(DATA_ROOT + 'test-mf.pkl')
+    orgs |= set(df['orgs'])
+    df = pd.read_pickle(DATA_ROOT + 'test-cc.pkl')
+    orgs |= set(df['orgs'])
+    pro = set()
+    with open('data/prokaryotes.txt') as f:
+        for line in f:
+            org = line.strip().split(':')[1]
+            if org in orgs:
+                pro.add(org)
+    eu = set()
+    with open('data/eukaryotes.txt') as f:
+        for line in f:
+            org = line.strip().split(':')[1]
+            if org in orgs:
+                eu.add(org)
+    df = pd.DataFrame({'orgs': list(eu)})
     print(df)
-    for i, row in df.iterrows():
-        for go_id in row['annots']:
-            it = go_id.split('|')
-            go_id = it[0]
-            if go_id in funcs and it[1] in EXP_CODES:
-                go_set |= get_anchestors(go, go_id)
-    print(len(go_set))
+    df.to_pickle('eukaryotes.pkl')
+    df = pd.DataFrame({'orgs': list(pro)})
+    df.to_pickle('prokaryotes.pkl')
+
 
 
 if __name__ == '__main__':

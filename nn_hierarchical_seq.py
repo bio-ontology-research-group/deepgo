@@ -339,31 +339,31 @@ def model():
 
     logging.info(preds.shape)
     incon = 0
-    for i in xrange(len(test_data)):
-        for j in xrange(len(functions)):
-            childs = set(go[functions[j]]['children']).intersection(func_set)
-            ok = True
-            for n_id in childs:
-                if preds[i, j] < preds[i, go_indexes[n_id]]:
-                    preds[i, j] = preds[i, go_indexes[n_id]]
-                    ok = False
-            if not ok:
-                incon += 1
+    # for i in xrange(len(test_data)):
+    #     for j in xrange(len(functions)):
+    #         childs = set(go[functions[j]]['children']).intersection(func_set)
+    #         ok = True
+    #         for n_id in childs:
+    #             if preds[i, j] < preds[i, go_indexes[n_id]]:
+    #                 preds[i, j] = preds[i, go_indexes[n_id]]
+    #                 ok = False
+    #         if not ok:
+    #             incon += 1
     f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
-    logging.info('Inconsistent predictions: %d' % incon)
-    logging.info('Saving the predictions')
-    proteins = test_df['proteins']
-    predictions = list()
-    for i in xrange(preds_max.shape[0]):
-        predictions.append(preds_max[i])
-    df = pd.DataFrame(
-        {
-            'proteins': proteins, 'predictions': predictions,
-            'gos': test_df['gos'], 'labels': test_df['labels']})
-    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
+    # logging.info('Inconsistent predictions: %d' % incon)
+    # logging.info('Saving the predictions')
+    # proteins = test_df['proteins']
+    # predictions = list()
+    # for i in xrange(preds_max.shape[0]):
+    #     predictions.append(preds_max[i])
+    # df = pd.DataFrame(
+    #     {
+    #         'proteins': proteins, 'predictions': predictions,
+    #         'gos': test_df['gos'], 'labels': test_df['labels']})
+    # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
     logging.info('Done in %d sec' % (time.time() - start_time))
 
 
@@ -405,15 +405,15 @@ def compute_performance(preds, labels, gos):
                 recall = tp / (1.0 * (tp + fn))
                 p += precision
                 r += recall
-                f += 2 * precision * recall / (precision + recall)
-        f /= total
         r /= total
         p /= total
-        if f_max < f:
-            f_max = f
-            p_max = p
-            r_max = r
-            predictions_max = predictions
+        if p + r > 0:
+            f = 2 * p * r / (p + r)
+            if f_max < f:
+                f_max = f
+                p_max = p
+                r_max = r
+                predictions_max = predictions
     return f_max, p_max, r_max, predictions_max
 
 

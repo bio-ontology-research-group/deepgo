@@ -108,6 +108,11 @@ def load_data():
         test_df = test_df[test_df['orgs'] == ORG]
         logging.info('Filtered test size: %d' % len(test_df))
 
+    # Filter by type
+    # org_df = pd.read_pickle('data/eukaryotes.pkl')
+    # orgs = org_df['orgs']
+    # test_df = test_df[test_df['orgs'].isin(orgs)]
+
     def reshape(values):
         values = np.hstack(values).reshape(
             len(values), len(values[0]))
@@ -370,17 +375,43 @@ def model():
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('Inconsistent predictions: %d' % incon)
-    logging.info('Saving the predictions')
-    proteins = test_df['proteins']
-    predictions = list()
-    for i in xrange(preds_max.shape[0]):
-        predictions.append(preds_max[i])
-    df = pd.DataFrame(
-        {
-            'proteins': proteins, 'predictions': predictions,
-            'gos': test_df['gos'], 'labels': test_df['labels']})
-    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
-    logging.info('Done in %d sec' % (time.time() - start_time))
+    # logging.info('Saving the predictions')
+    # proteins = test_df['proteins']
+    # predictions = list()
+    # for i in xrange(preds_max.shape[0]):
+    #     predictions.append(preds_max[i])
+    # df = pd.DataFrame(
+    #     {
+    #         'proteins': proteins, 'predictions': predictions,
+    #         'gos': test_df['gos'], 'labels': test_df['labels']})
+    # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
+    # logging.info('Done in %d sec' % (time.time() - start_time))
+
+    # function_centric_performance(functions, preds.T, test_labels.T)
+
+
+def function_centric_performance(functions, preds, labels):
+    preds = np.round(preds, 2)
+    for i in xrange(len(functions)):
+        f_max = 0
+        p_max = 0
+        r_max = 0
+        for t in xrange(1, 100):
+            threshold = t / 100.0
+            predictions = (preds[i, :] > threshold).astype(np.int32)
+            tp = np.sum(predictions * labels[i, :])
+            fp = np.sum(predictions) - tp
+            fn = np.sum(labels[i, :]) - tp
+            precision = tp / (1.0 * (tp + fp))
+            recall = tp / (1.0 * (tp + fn))
+            f = 2 * precision * recall / (precision + recall)
+            if f_max < f:
+                f_max = f
+                p_max = precision
+                r_max = recall
+        num_prots = np.sum(labels[i, :])
+        print('%s %f %f %f %d' % (
+            functions[i], f_max, p_max, r_max, num_prots))
 
 
 def compute_roc(preds, labels):
@@ -421,15 +452,15 @@ def compute_performance(preds, labels, gos):
                 recall = tp / (1.0 * (tp + fn))
                 p += precision
                 r += recall
-                f += 2 * precision * recall / (precision + recall)
-        f /= total
         r /= total
         p /= total
-        if f_max < f:
-            f_max = f
-            p_max = p
-            r_max = r
-            predictions_max = predictions
+        if p + r > 0:
+            f = 2 * p * r / (p + r)
+            if f_max < f:
+                f_max = f
+                p_max = p
+                r_max = r
+                predictions_max = predictions
     return f_max, p_max, r_max, predictions_max
 
 

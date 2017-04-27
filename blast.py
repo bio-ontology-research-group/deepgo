@@ -13,11 +13,11 @@ DATA_ROOT = 'data/swissexp/'
 def main():
 
     # convert()
+    f, p, r = compute_performance('bp')
+    print(f, p, r)
     f, p, r = compute_performance('mf')
     print(f, p, r)
     f, p, r = compute_performance('cc')
-    print(f, p, r)
-    f, p, r = compute_performance('bp')
     print(f, p, r)
 
 
@@ -30,18 +30,18 @@ def compute_performance(func):
     train_labels = {}
     test_labels = {}
     for i, row in train_df.iterrows():
-        go_set = set()
-        for go_id in row['gos']:
-            if go_id in go:
-                go_set |= get_anchestors(go, go_id)
-        train_labels[row['proteins']] = go_set
+        # go_set = set()
+        # for go_id in row['gos']:
+        #     if go_id in go:
+        #         go_set |= get_anchestors(go, go_id)
+        train_labels[row['proteins']] = row['labels']
 
     for i, row in test_df.iterrows():
-        go_set = set()
-        for go_id in row['gos']:
-            if go_id in go:
-                go_set |= get_anchestors(go, go_id)
-        test_labels[row['proteins']] = go_set
+        # go_set = set()
+        # for go_id in row['gos']:
+        #     if go_id in go:
+        #         go_set |= get_anchestors(go, go_id)
+        test_labels[row['proteins']] = row['labels']
 
     preds = list()
     test = list()
@@ -56,12 +56,12 @@ def compute_performance(func):
     r = 0.0
     f = 0.0
     for label, pred in zip(test, preds):
-        # tp = np.sum(label * pred)
-        # fp = np.sum(pred) - tp
-        # fn = np.sum(label) - tp
-        tp = len(label.intersection(pred))
-        fp = len(pred) - tp
-        fn = len(label) - tp
+        tp = np.sum(label * pred)
+        fp = np.sum(pred) - tp
+        fn = np.sum(label) - tp
+        # tp = len(label.intersection(pred))
+        # fp = len(pred) - tp
+        # fn = len(label) - tp
 
         if tp == 0 and fp == 0 and fn == 0:
             continue
@@ -71,8 +71,10 @@ def compute_performance(func):
             recall = tp / (1.0 * (tp + fn))
             p += precision
             r += recall
-            f += 2 * precision * recall / (precision + recall)
-    return f / total, p / total, r / total
+    p /= total
+    r /= total
+    f = 2 * p * r / (p + r)
+    return f, p, r
 
 
 def convert():
