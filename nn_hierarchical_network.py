@@ -109,7 +109,7 @@ def load_data():
         logging.info('Filtered test size: %d' % len(test_df))
 
     # Filter by type
-    # org_df = pd.read_pickle('data/eukaryotes.pkl')
+    # org_df = pd.read_pickle('data/prokaryotes.pkl')
     # orgs = org_df['orgs']
     # test_df = test_df[test_df['orgs'].isin(orgs)]
 
@@ -433,6 +433,7 @@ def compute_performance(preds, labels, gos):
         f = 0.0
         p = 0.0
         r = 0.0
+        p_total = 0
         for i in range(labels.shape[0]):
             tp = np.sum(predictions[i, :] * labels[i, :])
             fp = np.sum(predictions[i, :]) - tp
@@ -448,12 +449,13 @@ def compute_performance(preds, labels, gos):
                 continue
             total += 1
             if tp != 0:
+                p_total += 1
                 precision = tp / (1.0 * (tp + fp))
                 recall = tp / (1.0 * (tp + fn))
                 p += precision
                 r += recall
         r /= total
-        p /= total
+        p /= p_total
         if p + r > 0:
             f = 2 * p * r / (p + r)
             if f_max < f:
