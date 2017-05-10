@@ -1,6 +1,6 @@
 # DeepGO - Predicting Gene Ontology Functions
 
-DeepGO is a novel method for predicting protein functions using protein sequences and protein-protein interaction (PPI) networks. It uses deep neural networks to learn sequence and PPI network features and hierarchically classifies it with GO classes. PPI network features are learned using a neuro-symbolic approach for learning knowledge graph representations [1]
+DeepGO is a novel method for predicting protein functions using protein sequences and protein-protein interaction (PPI) networks. It uses deep neural networks to learn sequence and PPI network features and hierarchically classifies it with GO classes. PPI network features are learned using a neuro-symbolic approach for learning knowledge graph representations <cite>[1]</cite>
 
 This repository contains script which were used to build and train DeepGO model together with the scripts for evaluating the model's performance.
 
