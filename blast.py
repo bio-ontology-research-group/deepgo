@@ -23,25 +23,24 @@ def main():
 
 def compute_performance(func):
     go = get_gene_ontology()
-    go_set = get_go_set(go, BIOLOGICAL_PROCESS)
     train_df = pd.read_pickle('data/swissexp/train-' + func + '.pkl')
     test_df = pd.read_pickle('data/swissexp/test-' + func + '.pkl')
 
     train_labels = {}
     test_labels = {}
     for i, row in train_df.iterrows():
-        # go_set = set()
-        # for go_id in row['gos']:
-        #     if go_id in go:
-        #         go_set |= get_anchestors(go, go_id)
-        train_labels[row['proteins']] = row['labels']
+        go_set = set()
+        for go_id in row['gos']:
+            if go_id in go:
+                go_set |= get_anchestors(go, go_id)
+        train_labels[row['proteins']] = go_set
 
     for i, row in test_df.iterrows():
-        # go_set = set()
-        # for go_id in row['gos']:
-        #     if go_id in go:
-        #         go_set |= get_anchestors(go, go_id)
-        test_labels[row['proteins']] = row['labels']
+        go_set = set()
+        for go_id in row['gos']:
+            if go_id in go:
+                go_set |= get_anchestors(go, go_id)
+        test_labels[row['proteins']] = go_set
 
     preds = list()
     test = list()
@@ -55,23 +54,25 @@ def compute_performance(func):
     p = 0.0
     r = 0.0
     f = 0.0
+    p_total = 0
     for label, pred in zip(test, preds):
-        tp = np.sum(label * pred)
-        fp = np.sum(pred) - tp
-        fn = np.sum(label) - tp
-        # tp = len(label.intersection(pred))
-        # fp = len(pred) - tp
-        # fn = len(label) - tp
+        # tp = np.sum(label * pred)
+        # fp = np.sum(pred) - tp
+        # fn = np.sum(label) - tp
+        tp = len(label.intersection(pred))
+        fp = len(pred) - tp
+        fn = len(label) - tp
 
         if tp == 0 and fp == 0 and fn == 0:
             continue
         total += 1
         if tp != 0:
+            p_total += 1
             precision = tp / (1.0 * (tp + fp))
             recall = tp / (1.0 * (tp + fn))
             p += precision
             r += recall
-    p /= total
+    p /= p_total
     r /= total
     f = 2 * p * r / (p + r)
     return f, p, r

@@ -7,7 +7,7 @@ python nn_hierarchical_network.py
 import numpy as np
 import pandas as pd
 import click as ck
-from keras.models import Sequential, Model
+from keras.models import Sequential, Model, model_from_json
 from keras.layers import (
     Dense, Dropout, Activation, Input,
     Flatten, Highway, merge, BatchNormalization)
@@ -25,7 +25,8 @@ from utils import (
     FUNC_DICT,
     MyCheckpoint,
     save_model_weights,
-    load_model_weights)
+    load_model_weights,
+    get_ipro)
 from keras.callbacks import EarlyStopping
 from keras.preprocessing import sequence
 from keras import backend as K
@@ -92,6 +93,7 @@ def main(function, device, org):
     node_names = set()
     with tf.device('/' + device):
         model()
+    # performanc_by_interpro()
 
 
 def load_data():
@@ -282,6 +284,38 @@ def get_layers(inputs):
     return layers
 
 
+def get_model():
+    logging.info("Building the model")
+    # inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
+    # inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
+    # feature_model = get_feature_model()(inputs)
+    # merged = merge(
+    #     [feature_model, inputs2], mode='concat',
+    #     concat_axis=1, name='merged')
+    # layers = get_layers(merged)
+    # output_models = []
+    # for i in range(len(functions)):
+    #     output_models.append(layers[functions[i]]['output'])
+    # net = merge(output_models, mode='concat', concat_axis=1)
+    # model = Model(input=[inputs, inputs2], output=net)
+    with open(DATA_ROOT + 'model_' + FUNCTION + '.json') as f:
+        model_json = f.read()
+    model = model_from_json(model_json)
+    # logging.info('Saving the model')
+    # model_json = model.to_json()
+    # with open(DATA_ROOT + 'model_' + FUNCTION + '.json', 'w') as f:
+    #     f.write(model_json)
+    logging.info('Compiling the model')
+    optimizer = RMSprop()
+
+    model.compile(
+        optimizer=optimizer,
+        loss='binary_crossentropy')
+    logging.info(
+        'Compilation finished')
+    return model
+
+
 def model():
     # set parameters:
     batch_size = 128
@@ -299,30 +333,7 @@ def model():
     logging.info("Training data size: %d" % len(train_data[0]))
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
-    logging.info("Building the model")
-    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
-    feature_model = get_feature_model()(inputs)
-    merged = merge(
-        [feature_model, inputs2], mode='concat',
-        concat_axis=1, name='merged')
-    layers = get_layers(merged)
-    output_models = []
-    for i in range(len(functions)):
-        output_models.append(layers[functions[i]]['output'])
-    net = merge(output_models, mode='concat', concat_axis=1)
-    model = Model(input=[inputs, inputs2], output=net)
-    logging.info('Model built in %d sec' % (time.time() - start_time))
-    logging.info('Saving the model')
-    model_json = model.to_json()
-    with open(DATA_ROOT + 'model_' + FUNCTION + '.json', 'w') as f:
-        f.write(model_json)
-    logging.info('Compiling the model')
-    optimizer = RMSprop()
 
-    model.compile(
-        optimizer=optimizer,
-        loss='binary_crossentropy')
     pre_model_path = DATA_ROOT + 'pre_model_weights_' + FUNCTION + '.pkl'
     model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.pkl'
     last_model_path = DATA_ROOT + 'model_weights_' + FUNCTION + '.last.pkl'
@@ -330,9 +341,8 @@ def model():
         filepath=model_path,
         verbose=1, save_best_only=True, save_weights_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
-    logging.info(
-        'Compilation finished in %d sec' % (time.time() - start_time))
 
+    model = get_model()
     # logging.info('Loading pretrained weights')
     # load_model_weights(model, pre_model_path)
 
@@ -344,6 +354,7 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
+
     # model.fit_generator(
     #     train_generator,
     #     samples_per_epoch=len(train_data[0]),
@@ -355,11 +366,11 @@ def model():
 
     logging.info('Loading weights')
     load_model_weights(model, model_path)
-
+    model.save(DATA_ROOT + 'model_%s.h5' % FUNCTION)
+    logging.info('Predicting')
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data[0]))
-    logging.info(preds.shape)
-    incon = 0
+    # incon = 0
     # for i in xrange(len(test_data)):
     #     for j in xrange(len(functions)):
     #         childs = set(go[functions[j]]['children']).intersection(func_set)
@@ -370,24 +381,97 @@ def model():
     #                 ok = False
     #         if not ok:
     #             incon += 1
+    logging.info('Computing performance')
     f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
-    roc_auc = compute_roc(preds, test_labels)
-    logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
-    logging.info('ROC AUC: \t %f ' % (roc_auc, ))
-    logging.info('Inconsistent predictions: %d' % incon)
-    # logging.info('Saving the predictions')
-    # proteins = test_df['proteins']
-    # predictions = list()
-    # for i in xrange(preds_max.shape[0]):
-    #     predictions.append(preds_max[i])
-    # df = pd.DataFrame(
-    #     {
-    #         'proteins': proteins, 'predictions': predictions,
-    #         'gos': test_df['gos'], 'labels': test_df['labels']})
-    # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
-    # logging.info('Done in %d sec' % (time.time() - start_time))
+    # roc_auc = compute_roc(preds, test_labels)
+    # logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
+    # logging.info('ROC AUC: \t %f ' % (roc_auc, ))
+    # logging.info('Inconsistent predictions: %d' % incon)
+    logging.info('Saving the predictions')
+    proteins = test_df['proteins']
+    predictions = list()
+    for i in xrange(preds_max.shape[0]):
+        predictions.append(preds_max[i])
+    df = pd.DataFrame(
+        {
+            'proteins': proteins, 'predictions': predictions,
+            'gos': test_df['gos'], 'labels': test_df['labels']})
+    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-predictions.pkl')
+    logging.info('Done in %d sec' % (time.time() - start_time))
 
     # function_centric_performance(functions, preds.T, test_labels.T)
+
+
+def load_prot_ipro():
+    proteins = list()
+    ipros = list()
+    with open(DATA_ROOT + 'swissprot_ipro.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            if len(it) != 3:
+                continue
+            prot = it[1]
+            iprs = it[2].split(';')
+            proteins.append(prot)
+            ipros.append(iprs)
+    return pd.DataFrame({'proteins': proteins, 'ipros': ipros})
+
+
+def performanc_by_interpro():
+    pred_df = pd.read_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
+    ipro_df = load_prot_ipro()
+    df = pred_df.merge(ipro_df, on='proteins', how='left')
+    ipro = get_ipro()
+
+    def reshape(values):
+        values = np.hstack(values).reshape(
+            len(values), len(values[0]))
+        return values
+
+    for ipro_id in ipro:
+        if len(ipro[ipro_id]['parents']) > 0:
+            continue
+        labels = list()
+        predictions = list()
+        gos = list()
+        for i, row in df.iterrows():
+            if not isinstance(row['ipros'], list):
+                continue
+            if ipro_id in row['ipros']:
+                labels.append(row['labels'])
+                predictions.append(row['predictions'])
+                gos.append(row['gos'])
+        pr = 0
+        rc = 0
+        total = 0
+        p_total = 0
+        for i in xrange(len(labels)):
+            tp = np.sum(labels[i] * predictions[i])
+            fp = np.sum(predictions[i]) - tp
+            fn = np.sum(labels[i]) - tp
+            all_gos = set()
+            for go_id in gos[i]:
+                if go_id in all_functions:
+                    all_gos |= get_anchestors(go, go_id)
+            all_gos.discard(GO_ID)
+            all_gos -= func_set
+            fn += len(all_gos)
+            if tp == 0 and fp == 0 and fn == 0:
+                continue
+            total += 1
+            if tp != 0:
+                p_total += 1
+                precision = tp / (1.0 * (tp + fp))
+                recall = tp / (1.0 * (tp + fn))
+                pr += precision
+                rc += recall
+        if total > 0 and p_total > 0:
+            rc /= total
+            pr /= p_total
+            if pr + rc > 0:
+                f = 2 * pr * rc / (pr + rc)
+                logging.info('%s\t%d\t%f\t%f\t%f' % (
+                    ipro_id, len(labels), f, pr, rc))
 
 
 def function_centric_performance(functions, preds, labels):
@@ -396,12 +480,20 @@ def function_centric_performance(functions, preds, labels):
         f_max = 0
         p_max = 0
         r_max = 0
+        x = list()
+        y = list()
         for t in xrange(1, 100):
             threshold = t / 100.0
             predictions = (preds[i, :] > threshold).astype(np.int32)
             tp = np.sum(predictions * labels[i, :])
             fp = np.sum(predictions) - tp
             fn = np.sum(labels[i, :]) - tp
+            sn = tp / (1.0 * np.sum(labels[i, :]))
+            sp = np.sum((predictions ^ 1) * (labels[i, :] ^ 1))
+            sp /= 1.0 * np.sum(labels[i, :] ^ 1)
+            fpr = 1 - sp
+            x.append(fpr)
+            y.append(sn)
             precision = tp / (1.0 * (tp + fp))
             recall = tp / (1.0 * (tp + fn))
             f = 2 * precision * recall / (precision + recall)
@@ -410,8 +502,9 @@ def function_centric_performance(functions, preds, labels):
                 p_max = precision
                 r_max = recall
         num_prots = np.sum(labels[i, :])
-        print('%s %f %f %f %d' % (
-            functions[i], f_max, p_max, r_max, num_prots))
+        roc_auc = auc(x, y)
+        print('%s %f %f %f %d %f' % (
+            functions[i], f_max, p_max, r_max, num_prots, roc_auc))
 
 
 def compute_roc(preds, labels):

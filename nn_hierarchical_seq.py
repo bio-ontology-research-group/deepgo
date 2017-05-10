@@ -334,6 +334,8 @@ def model():
     logging.info('Loading weights')
     load_model_weights(model, model_path)
 
+    # model.save(DATA_ROOT + 'model_%s.h5' % FUNCTION)
+
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data))
 
@@ -353,18 +355,53 @@ def model():
     roc_auc = compute_roc(preds, test_labels)
     logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
-    # logging.info('Inconsistent predictions: %d' % incon)
-    # logging.info('Saving the predictions')
-    # proteins = test_df['proteins']
-    # predictions = list()
-    # for i in xrange(preds_max.shape[0]):
-    #     predictions.append(preds_max[i])
-    # df = pd.DataFrame(
-    #     {
-    #         'proteins': proteins, 'predictions': predictions,
-    #         'gos': test_df['gos'], 'labels': test_df['labels']})
-    # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
+    logging.info('Inconsistent predictions: %d' % incon)
+    logging.info('Saving the predictions')
+    proteins = test_df['proteins']
+    predictions = list()
+    for i in xrange(preds_max.shape[0]):
+        predictions.append(preds_max[i])
+    df = pd.DataFrame(
+        {
+            'proteins': proteins, 'predictions': predictions,
+            'gos': test_df['gos'], 'labels': test_df['labels']})
+    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds-seq.pkl')
     logging.info('Done in %d sec' % (time.time() - start_time))
+
+    function_centric_performance(functions, preds.T, test_labels.T)
+
+
+def function_centric_performance(functions, preds, labels):
+    preds = np.round(preds, 2)
+    for i in xrange(len(functions)):
+        f_max = 0
+        p_max = 0
+        r_max = 0
+        x = list()
+        y = list()
+        for t in xrange(1, 100):
+            threshold = t / 100.0
+            predictions = (preds[i, :] > threshold).astype(np.int32)
+            tp = np.sum(predictions * labels[i, :])
+            fp = np.sum(predictions) - tp
+            fn = np.sum(labels[i, :]) - tp
+            sn = tp / (1.0 * np.sum(labels[i, :]))
+            sp = np.sum((predictions ^ 1) * (labels[i, :] ^ 1))
+            sp /= 1.0 * np.sum(labels[i, :] ^ 1)
+            fpr = 1 - sp
+            x.append(fpr)
+            y.append(sn)
+            precision = tp / (1.0 * (tp + fp))
+            recall = tp / (1.0 * (tp + fn))
+            f = 2 * precision * recall / (precision + recall)
+            if f_max < f:
+                f_max = f
+                p_max = precision
+                r_max = recall
+        num_prots = np.sum(labels[i, :])
+        roc_auc = auc(x, y)
+        print('%s %f %f %f %d %f' % (
+            functions[i], f_max, p_max, r_max, num_prots, roc_auc))
 
 
 def compute_roc(preds, labels):
@@ -386,27 +423,31 @@ def compute_performance(preds, labels, gos):
         f = 0.0
         p = 0.0
         r = 0.0
+        p_total = 0
         for i in range(labels.shape[0]):
             tp = np.sum(predictions[i, :] * labels[i, :])
             fp = np.sum(predictions[i, :]) - tp
             fn = np.sum(labels[i, :]) - tp
-            all_gos = set()
-            for go_id in gos[i]:
-                if go_id in all_functions:
-                    all_gos |= get_anchestors(go, go_id)
-            all_gos.discard(GO_ID)
-            all_gos -= func_set
-            fn += len(all_gos)
+            # all_gos = set()
+            # for go_id in gos[i]:
+            #     if go_id in all_functions:
+            #         all_gos |= get_anchestors(go, go_id)
+            # all_gos.discard(GO_ID)
+            # all_gos -= func_set
+            # fn += len(all_gos)
             if tp == 0 and fp == 0 and fn == 0:
                 continue
             total += 1
             if tp != 0:
+                p_total += 1
                 precision = tp / (1.0 * (tp + fp))
                 recall = tp / (1.0 * (tp + fn))
                 p += precision
                 r += recall
+        if p_total == 0:
+            continue
         r /= total
-        p /= total
+        p /= p_total
         if p + r > 0:
             f = 2 * p * r / (p + r)
             if f_max < f:

@@ -3,7 +3,7 @@ from keras import backend as K
 from keras.callbacks import ModelCheckpoint
 import warnings
 import pandas as pd
-
+from xml.etree import ElementTree as ET
 
 BIOLOGICAL_PROCESS = 'GO:0008150'
 MOLECULAR_FUNCTION = 'GO:0003674'
@@ -17,34 +17,25 @@ EXP_CODES = set(['EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'TAS', 'IC'])
 
 def get_ipro():
     ipro = dict()
-    ipros = list()
-    with open('data/interpro.txt', 'r') as f:
-        for line in f:
-            items = line.strip().split('::')
-            ipros.append(items)
-
-    def read_tree(parent, i):
-        level = ipros[i][0].rfind('-')
-        ipro_id = ipros[i][0][level + 1:]
-        name = ipros[i][1]
-        obj = {'id': ipro_id, 'name': name, 'children': list(), 'parent': None}
-        if parent is not None:
-            parent['children'].append(ipro_id)
-            obj['parent'] = parent['id']
-        ipro[ipro_id] = obj
-        if i + 1 < len(ipros):
-            next_ipro_level = ipros[i + 1][0].rfind('-')
-            if next_ipro_level == -1:
-                return
-            elif level < next_ipro_level:
-                read_tree(obj, i + 1)
-            elif level == next_ipro_level:
-                read_tree(parent, i + 1)
-            elif ipro[parent['parent']] is not None:
-                read_tree(ipro[parent['parent']], i + 1)
-    for i in range(len(ipros)):
-        if ipros[i][0].rfind('-') == -1:
-            read_tree(None, i)
+    tree = ET.parse('data/interpro.xml')
+    root = tree.getroot()
+    for child in root:
+        if child.tag != 'interpro':
+            continue
+        ipro_id = child.attrib['id']
+        name = child.find('name').text
+        ipro[ipro_id] = {
+            'id': ipro_id,
+            'name': name,
+            'children': list(), 'parents': list()}
+        parents = child.find('parent_list')
+        if parents:
+            for parent in parents:
+                ipro[ipro_id]['parents'].append(parent.attrib['ipr_ref'])
+        children = child.find('child_list')
+        if children:
+            for ch in children:
+                ipro[ipro_id]['children'].append(ch.attrib['ipr_ref'])
     return ipro
 
 
@@ -55,8 +46,8 @@ def get_ipro_anchestors(ipro, ipro_id):
     while(len(q) > 0):
         i_id = q.popleft()
         ipro_set.add(i_id)
-        if ipro[i_id]['parent']:
-            for parent_id in ipro[i_id]['parent']:
+        if ipro[i_id]['parents']:
+            for parent_id in ipro[i_id]['parents']:
                 if parent_id in ipro:
                     q.append(parent_id)
     return ipro_set
@@ -282,3 +273,8 @@ class DataGenerator(object):
         else:
             self.reset()
             return self.next()
+
+
+if __name__ == '__main__':
+    pass
+    get_ipro_xml()

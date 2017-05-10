@@ -12,8 +12,6 @@ from utils import (
 
 
 DATA_ROOT = 'data/swissexp/'
-
-
 @ck.command()
 def main():
     df = pd.read_pickle(DATA_ROOT + 'test-bp.pkl')
@@ -39,7 +37,6 @@ def main():
     df.to_pickle('eukaryotes.pkl')
     df = pd.DataFrame({'orgs': list(pro)})
     df.to_pickle('prokaryotes.pkl')
-
 
 
 if __name__ == '__main__':
