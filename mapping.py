@@ -7,6 +7,7 @@ from utils import EXP_CODES, get_gene_ontology
 import os
 import requests
 from aaindex import is_ok
+import gzip
 
 
 DATA_ROOT = 'data/swissexp/'
@@ -159,17 +160,20 @@ def string_uni():
             it = line.strip().split('\t')
             mapping[it[1].upper()[:-1]] = it[0]
 
-    # prots = dict()
-    # with open('data/uni_uni.dat') as f:
-    #     for line in f:
-    #         it = line.strip().split('\t')
-    #         prots[it[0]] = it[1]
+    deep_map = dict()
 
-    embeds = dict()
-    with open('data/graph_reps.tab') as f:
+    with gzip.open('data/graph.mapping.out.gz') as f:
         for line in f:
             it = line.strip().split('\t')
-            st_id = it[0].upper()
+            deep_map[it[1]] = it[0]
+
+    embeds = dict()
+    with gzip.open('data/graph_deep.out.gz') as f:
+        next(f)
+        next(f)
+        for line in f:
+            it = line.strip().split()
+            st_id = deep_map[it[0]].upper()
             if st_id in mapping:
                 ac_id = mapping[st_id]
                 embeds[ac_id] = np.array(
@@ -179,7 +183,7 @@ def string_uni():
         'accessions': embeds.keys(),
         'embeddings': embeds.values()})
     print(len(df))
-    df.to_pickle('data/graph_embeddings.pkl')
+    df.to_pickle('data/graph_new_embeddings.pkl')
 
 
 def idmapping():
@@ -392,11 +396,11 @@ def merge_trembl():
 
 
 def main():
-    # string_uni()
+    string_uni()
     # human_go_annotations()
     # predictions('9606')
     # to_pickle()
-    filter_exp()
+    # filter_exp()
     # goa_pickle()
     # download_prots()
     # merge_trembl()
