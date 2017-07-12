@@ -16,3 +16,4 @@ def is_ok(seq):
         if c in INVALID_ACIDS:
             return False
     return True
+

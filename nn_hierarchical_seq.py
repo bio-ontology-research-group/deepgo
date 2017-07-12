@@ -26,7 +26,7 @@ from utils import (
     MyCheckpoint,
     save_model_weights,
     load_model_weights)
-from keras.callbacks import EarlyStopping
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.preprocessing import sequence
 from keras import backend as K
 import sys
@@ -46,7 +46,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swissexp/'
+DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -303,10 +303,10 @@ def model():
         loss='binary_crossentropy')
 
     pre_model_path = DATA_ROOT + 'pre_model_seq_weights_' + FUNCTION + '.pkl'
-    model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
-    checkpointer = MyCheckpoint(
+    model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.h5'
+    checkpointer = ModelCheckpoint(
         filepath=model_path,
-        verbose=1, save_best_only=True, save_weights_only=True)
+        verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
     logging.info(
         'Compilation finished in %d sec' % (time.time() - start_time))

@@ -11,7 +11,7 @@ from utils import (
 from aaindex import is_ok
 import click as ck
 
-DATA_ROOT = 'data/swissexp/'
+DATA_ROOT = 'data/swiss/'
 
 
 @ck.command()
@@ -107,7 +107,7 @@ def load_data():
 
 
 def load_rep_df():
-    df = pd.read_pickle('data/graph_embeddings.pkl')
+    df = pd.read_pickle('data/graph_new_embeddings.pkl')
     return df
 
 

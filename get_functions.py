@@ -10,7 +10,7 @@ from collections import deque
 from aaindex import is_ok
 
 
-DATA_ROOT = 'data/swissexp/'
+DATA_ROOT = 'data/swiss/'
 
 
 @ck.command()
@@ -33,7 +33,6 @@ def main(function, annot_num):
     functions = deque()
     dfs(GO_ID)
     functions.remove(GO_ID)
-    # functions.reverse()
     functions = list(functions)
     print(len(functions))
     global func_set

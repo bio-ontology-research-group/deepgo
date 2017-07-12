@@ -47,7 +47,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/deeponto/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -119,13 +119,6 @@ def load_data():
         values = np.hstack(values).reshape(
             len(values), len(values[0]))
         return values
-
-    def normalize_minmax(values):
-        mn = np.min(values)
-        mx = np.max(values)
-        if mx - mn != 0.0:
-            return (values - mn) / (mx - mn)
-        return values - mn
 
     def get_values(data_frame):
         print(data_frame['labels'].values.shape)

@@ -7,18 +7,19 @@ from utils import (
     BIOLOGICAL_PROCESS, MOLECULAR_FUNCTION, CELLULAR_COMPONENT,
     EXP_CODES, get_anchestors, get_gene_ontology, get_go_set)
 
-DATA_ROOT = 'data/swissexp/'
+DATA_ROOT = 'data/swiss/'
+
 
 @ck.command()
-def main():
-
-    # convert()
-    f, p, r = compute_performance('bp')
-    print(f, p, r)
-    f, p, r = compute_performance('mf')
-    print(f, p, r)
-    f, p, r = compute_performance('cc')
-    print(f, p, r)
+@ck.option('--function', default='mf', help='Function')
+def main(function):
+    fill_missing(function)
+    # f, p, r = compute_performance('bp')
+    # print(f, p, r)
+    # f, p, r = compute_performance('mf')
+    # print(f, p, r)
+    # f, p, r = compute_performance('cc')
+    # print(f, p, r)
 
 
 def compute_performance(func):
@@ -78,12 +79,21 @@ def compute_performance(func):
     return f, p, r
 
 
-def convert():
-    df = pd.read_pickle(DATA_ROOT + 'train-bp.pkl')
-    with open(DATA_ROOT + 'train-bp.fa', 'w') as f:
-        for i, row in df.iterrows():
-            f.write('>' + row['proteins'] + '\n')
-            f.write(to_fasta(str(row['sequences'])))
+def convert(function):
+    df = pd.read_pickle(DATA_ROOT + 'test-' + function + '.pkl')
+    f1 = open(DATA_ROOT + 'test-' + function + '.fa', 'w')
+    f2 = open(DATA_ROOT + 'test-missing-' + function + '.fa', 'w')
+
+    for i, row in df.iterrows():
+        missing = np.sum(row['embeddings']) == 0
+        if not missing:
+            f1.write('>' + row['proteins'] + '\n')
+            f1.write(to_fasta(str(row['sequences'])))
+        else:
+            f2.write('>' + row['proteins'] + '\n')
+            f2.write(to_fasta(str(row['sequences'])))
+    f1.close()
+    f2.close()
 
 
 def to_fasta(sequence):
@@ -93,6 +103,36 @@ def to_fasta(sequence):
     for i in xrange(0, n, length):
         res += sequence[i: i + length] + '\n'
     return res
+
+
+def fill_missing(function):
+    tt = 'train'
+    df = pd.read_pickle(DATA_ROOT + tt + '-' + function + '.pkl')
+    mapping = dict()
+    with open(DATA_ROOT + 'blast-' + tt + '-cc.res') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            mapping[it[0]] = it[1]
+    embeddings = dict()
+    for i, row in df.iterrows():
+        missing = np.sum(row['embeddings']) == 0
+        if not missing:
+            embeddings[row['proteins']] = row['embeddings']
+
+    m = 0
+    for i, row in df.iterrows():
+        missing = np.sum(row['embeddings']) == 0
+        if missing and row['proteins'] in mapping:
+            row['embeddings'] = embeddings[mapping[row['proteins']]]
+            m += 1
+    print(m)
+    n = 0
+    for i, row in df.iterrows():
+        missing = np.sum(row['embeddings']) == 0
+        if missing:
+            n += 1
+    print(n)
+    df.to_pickle(DATA_ROOT + tt + '-' + function + '-nomissing.pkl')
 
 
 if __name__ == '__main__':
