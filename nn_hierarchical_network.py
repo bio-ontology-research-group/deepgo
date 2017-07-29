@@ -66,7 +66,8 @@ ind = 0
     '--org',
     default=None,
     help='Organism id for filtering test set')
-def main(function, device, org):
+@ck.option('--train', is_flag=True)
+def main(function, device, org, train):
     global FUNCTION
     FUNCTION = function
     global GO_ID
@@ -92,19 +93,19 @@ def main(function, device, org):
     global node_names
     node_names = set()
     with tf.device('/' + device):
-        model()
+        model(is_train=train)
     # performanc_by_interpro()
 
 
 def load_data():
 
-    df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '-nomissing.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = df.index.values
     valid_n = int(n * 0.8)
     train_df = df.loc[index[:valid_n]]
     valid_df = df.loc[index[valid_n:]]
-    test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '-nomissing.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
     if ORG is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == ORG]
@@ -297,6 +298,8 @@ def get_model():
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
     net = merge(output_models, mode='concat', concat_axis=1)
+    # net = Dense(1024, activation='relu')(merged)
+    # net = Dense(len(functions), activation='sigmoid')(net)
     model = Model(input=[inputs, inputs2], output=net)
     logging.info('Compiling the model')
     optimizer = RMSprop()
@@ -309,7 +312,7 @@ def get_model():
     return model
 
 
-def model(batch_size=128, nb_epoch=100):
+def model(batch_size=128, nb_epoch=100, is_train=True):
     # set parameters:
     nb_classes = len(functions)
     start_time = time.time()
@@ -341,15 +344,16 @@ def model(batch_size=128, nb_epoch=100):
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
 
-    # model = get_model()
-    # model.fit_generator(
-    #     train_generator,
-    #     samples_per_epoch=len(train_data[0]),
-    #     nb_epoch=nb_epoch,
-    #     validation_data=valid_generator,
-    #     nb_val_samples=len(val_data[0]),
-    #     max_q_size=batch_size,
-    #     callbacks=[checkpointer, earlystopper])
+    if is_train:
+        model = get_model()
+        model.fit_generator(
+            train_generator,
+            samples_per_epoch=len(train_data[0]),
+            nb_epoch=nb_epoch,
+            validation_data=valid_generator,
+            nb_val_samples=len(val_data[0]),
+            max_q_size=batch_size,
+            callbacks=[checkpointer, earlystopper])
 
     logging.info('Loading best model')
     model = load_model(model_path)
@@ -535,6 +539,8 @@ def compute_performance(preds, labels, gos):
                 recall = tp / (1.0 * (tp + fn))
                 p += precision
                 r += recall
+        if p_total == 0:
+            continue
         r /= total
         p /= p_total
         if p + r > 0:

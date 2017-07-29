@@ -46,7 +46,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/swissexp/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -303,7 +303,7 @@ def model():
         loss='binary_crossentropy')
 
     pre_model_path = DATA_ROOT + 'pre_model_seq_weights_' + FUNCTION + '.pkl'
-    model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.h5'
+    model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
     checkpointer = ModelCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True)
@@ -368,7 +368,7 @@ def model():
     df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds-seq.pkl')
     logging.info('Done in %d sec' % (time.time() - start_time))
 
-    function_centric_performance(functions, preds.T, test_labels.T)
+    # function_centric_performance(functions, preds.T, test_labels.T)
 
 
 def function_centric_performance(functions, preds, labels):
