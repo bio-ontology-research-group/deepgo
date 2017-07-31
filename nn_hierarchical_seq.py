@@ -7,7 +7,7 @@ python nn_hierarchical_network.py
 import numpy as np
 import pandas as pd
 import click as ck
-from keras.models import Sequential, Model
+from keras.models import Sequential, Model, load_model
 from keras.layers import (
     Dense, Dropout, Activation, Input,
     Flatten, Highway, merge, BatchNormalization)
@@ -25,7 +25,8 @@ from utils import (
     FUNC_DICT,
     MyCheckpoint,
     save_model_weights,
-    load_model_weights)
+    load_model_weights,
+    get_ipro)
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.preprocessing import sequence
 from keras import backend as K
@@ -34,7 +35,7 @@ from collections import deque
 import time
 import logging
 import tensorflow as tf
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, matthews_corrcoef
 from scipy.spatial import distance
 from multiprocessing import Pool
 
@@ -46,7 +47,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swissexp/'
+DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -65,7 +66,8 @@ ind = 0
     '--org',
     default=None,
     help='Organism id for filtering test set')
-def main(function, device, org):
+@ck.option('--train', is_flag=True)
+def main(function, device, org, train):
     global FUNCTION
     FUNCTION = function
     global GO_ID
@@ -81,7 +83,9 @@ def main(function, device, org):
     func_set = set(functions)
     global all_functions
     all_functions = get_go_set(go, GO_ID)
-    logging.info(len(functions))
+    logging.info('Functions: %s %d' % (FUNCTION, len(functions)))
+    if ORG is not None:
+        logging.info('Organism %s' % ORG)
     global go_indexes
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
@@ -89,39 +93,56 @@ def main(function, device, org):
     global node_names
     node_names = set()
     with tf.device('/' + device):
-        model()
+        model(is_train=train)
+    # performanc_by_interpro()
 
 
-def load_data(split=0.7):
+def load_data():
+
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
-    index = np.arange(n)
+    index = df.index.values
     valid_n = int(n * 0.8)
-    train_df = df.iloc[index[:valid_n]]
-    valid_df = df.iloc[index[valid_n:]]
+    train_df = df.loc[index[:valid_n]]
+    valid_df = df.loc[index[valid_n:]]
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
     if ORG is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == ORG]
         logging.info('Filtered test size: %d' % len(test_df))
 
+    # Filter by type
+    # org_df = pd.read_pickle('data/prokaryotes.pkl')
+    # orgs = org_df['orgs']
+    # test_df = test_df[test_df['orgs'].isin(orgs)]
+
     def reshape(values):
         values = np.hstack(values).reshape(
             len(values), len(values[0]))
         return values
 
+    def normalize_minmax(values):
+        mn = np.min(values)
+        mx = np.max(values)
+        if mx - mn != 0.0:
+            return (values - mn) / (mx - mn)
+        return values - mn
+
     def get_values(data_frame):
+        print(data_frame['labels'].values.shape)
         labels = reshape(data_frame['labels'].values)
         ngrams = sequence.pad_sequences(
             data_frame['ngrams'].values, maxlen=MAXLEN)
         ngrams = reshape(ngrams)
-        return ngrams, labels
+        rep = reshape(data_frame['embeddings'].values)
+        data = ngrams
+        return data, labels
 
     train = get_values(train_df)
     valid = get_values(valid_df)
     test = get_values(test_df)
 
-    return train, valid, test, test_df
+    return train, valid, test, train_df, valid_df, test_df
 
 
 def get_feature_model():
@@ -134,12 +155,12 @@ def get_feature_model():
         input_length=MAXLEN,
         dropout=0.2))
     model.add(Convolution1D(
-        nb_filter=16,
-        filter_length=64,
+        nb_filter=32,
+        filter_length=128,
         border_mode='valid',
         activation='relu',
         subsample_length=1))
-    model.add(MaxPooling1D(pool_length=32, stride=16))
+    model.add(MaxPooling1D(pool_length=64, stride=32))
     model.add(Flatten())
     return model
 
@@ -173,14 +194,16 @@ def get_node_name(go_id, unique=False):
 
 def get_function_node(name, inputs):
     output_name = name + '_out'
-    net = Dense(256, name=name, activation='relu')(inputs)
-    output = Dense(1, name=output_name, activation='sigmoid')(net)
-    return net, output
+    # net = Dense(256, name=name, activation='relu')(inputs)
+    output = Dense(1, name=output_name, activation='sigmoid')(inputs)
+    return output, output
 
 
 def get_layers_recursive(inputs, node_output_dim=256):
     layers = dict()
     name = get_node_name(GO_ID)
+    inputs = Dense(
+        node_output_dim, activation='relu', name=name)(inputs)
 
     def dfs(node_id, inputs):
         name = get_node_name(node_id, unique=True)
@@ -230,15 +253,15 @@ def get_layers(inputs):
     while len(q) > 0:
         node_id, net = q.popleft()
         parent_nets = [inputs]
-        for p_id in get_parents(go, node_id):
-            if p_id in func_set:
-                parent_nets.append(layers[p_id]['net'])
-        if len(parent_nets) > 1:
-            name = get_node_name(node_id) + '_parents'
-            net = merge(
-                parent_nets, mode='concat', concat_axis=1, name=name)
+        # for p_id in get_parents(go, node_id):
+        #     if p_id in func_set:
+        #         parent_nets.append(layers[p_id]['net'])
+        # if len(parent_nets) > 1:
+        #     name = get_node_name(node_id) + '_parents'
+        #     net = merge(
+        #         parent_nets, mode='concat', concat_axis=1, name=name)
         name = get_node_name(node_id)
-        net, output = get_function_node(name, net)
+        net, output = get_function_node(name, inputs)
         if node_id not in layers:
             layers[node_id] = {'net': net, 'output': output}
             for n_id in go[node_id]['children']:
@@ -262,14 +285,37 @@ def get_layers(inputs):
     return layers
 
 
-def model():
+def get_model():
+    logging.info("Building the model")
+    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
+    feature_model = get_feature_model()(inputs)
+    net = Dense(1024, activation='relu')(feature_model)
+    layers = get_layers(net)
+    output_models = []
+    for i in range(len(functions)):
+        output_models.append(layers[functions[i]]['output'])
+    net = merge(output_models, mode='concat', concat_axis=1)
+    # net = Dense(1024, activation='relu')(merged)
+    # net = Dense(len(functions), activation='sigmoid')(net)
+    model = Model(input=inputs, output=net)
+    logging.info('Compiling the model')
+    optimizer = RMSprop()
+
+    model.compile(
+        optimizer=optimizer,
+        loss='binary_crossentropy')
+    logging.info(
+        'Compilation finished')
+    return model
+
+
+def model(batch_size=128, nb_epoch=100, is_train=True):
     # set parameters:
-    batch_size = 128
-    nb_epoch = 100
     nb_classes = len(functions)
     start_time = time.time()
     logging.info("Loading Data")
-    train, val, test, test_df = load_data()
+    train, val, test, train_df, valid_df, test_df = load_data()
+    train_df = pd.concat([train_df, valid_df])
     test_gos = test_df['gos'].values
     train_data, train_labels = train
     val_data, val_labels = val
@@ -278,41 +324,12 @@ def model():
     logging.info("Training data size: %d" % len(train_data))
     logging.info("Validation data size: %d" % len(val_data))
     logging.info("Test data size: %d" % len(test_data))
-    logging.info("Building the model")
-    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    feature_model = get_feature_model()(inputs)
-    layers = get_layers(feature_model)
-    output_models = []
-    for i in range(len(functions)):
-        output_models.append(layers[functions[i]]['output'])
-    net = merge(output_models, mode='concat', concat_axis=1)
-    # net = Dense(nb_classes * 2, activation='relu')(feature_model)
-    # net = Dense(nb_classes, activation='sigmoid')(net)
-    # net = Activation('sigmoid')(net)
-    model = Model(input=inputs, output=net)
-    logging.info('Model built in %d sec' % (time.time() - start_time))
-    logging.info('Saving the model')
-    model_json = model.to_json()
-    with open(DATA_ROOT + 'model_seq_' + FUNCTION + '.json', 'w') as f:
-        f.write(model_json)
-    logging.info('Compiling the model')
-    optimizer = RMSprop()
 
-    model.compile(
-        optimizer=optimizer,
-        loss='binary_crossentropy')
-
-    pre_model_path = DATA_ROOT + 'pre_model_seq_weights_' + FUNCTION + '.pkl'
-    model_path = DATA_ROOT + 'model_seq_weights_' + FUNCTION + '.pkl'
+    model_path = DATA_ROOT + 'model_seq_' + FUNCTION + '.h5'
     checkpointer = ModelCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
-    logging.info(
-        'Compilation finished in %d sec' % (time.time() - start_time))
-
-    # logging.info('Loading pretrained weights')
-    # load_model_weights(model, pre_model_path)
 
     logging.info('Starting training the model')
 
@@ -322,25 +339,25 @@ def model():
     valid_generator.fit(val_data, val_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
-    # model.fit_generator(
-    #     train_generator,
-    #     samples_per_epoch=len(train_data),
-    #     nb_epoch=nb_epoch,
-    #     validation_data=valid_generator,
-    #     nb_val_samples=len(val_data),
-    #     max_q_size=batch_size,
-    #     callbacks=[checkpointer, earlystopper])
 
-    logging.info('Loading weights')
-    load_model_weights(model, model_path)
+    if is_train:
+        model = get_model()
+        model.fit_generator(
+            train_generator,
+            samples_per_epoch=len(train_data),
+            nb_epoch=nb_epoch,
+            validation_data=valid_generator,
+            nb_val_samples=len(val_data),
+            max_q_size=batch_size,
+            callbacks=[checkpointer, earlystopper])
 
-    # model.save(DATA_ROOT + 'model_%s.h5' % FUNCTION)
+    logging.info('Loading best model')
+    model = load_model(model_path)
 
+    logging.info('Predicting')
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data))
-
-    logging.info(preds.shape)
-    incon = 0
+    # incon = 0
     # for i in xrange(len(test_data)):
     #     for j in xrange(len(functions)):
     #         childs = set(go[functions[j]]['children']).intersection(func_set)
@@ -351,24 +368,99 @@ def model():
     #                 ok = False
     #         if not ok:
     #             incon += 1
-    f, p, r, preds_max = compute_performance(preds, test_labels, test_gos)
+    logging.info('Computing performance')
+    f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
-    logging.info('Fmax measure: \t %f %f %f' % (f, p, r))
+    mcc = compute_mcc(preds_max, test_labels)
+    logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
-    logging.info('Inconsistent predictions: %d' % incon)
-    logging.info('Saving the predictions')
-    proteins = test_df['proteins']
-    predictions = list()
-    for i in xrange(preds_max.shape[0]):
-        predictions.append(preds_max[i])
-    df = pd.DataFrame(
-        {
-            'proteins': proteins, 'predictions': predictions,
-            'gos': test_df['gos'], 'labels': test_df['labels']})
-    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds-seq.pkl')
-    logging.info('Done in %d sec' % (time.time() - start_time))
+    logging.info('MCC: \t %f ' % (mcc, ))
+    # logging.info('Inconsistent predictions: %d' % incon)
+    # logging.info('Saving the predictions')
+    # proteins = test_df['proteins']
+    # predictions = list()
+    # for i in xrange(preds_max.shape[0]):
+    #     predictions.append(preds_max[i])
+    # df = pd.DataFrame(
+    #     {
+    #         'proteins': proteins, 'predictions': predictions,
+    #         'gos': test_df['gos'], 'labels': test_df['labels']})
+    # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-predictions.pkl')
+    # logging.info('Done in %d sec' % (time.time() - start_time))
 
     # function_centric_performance(functions, preds.T, test_labels.T)
+
+
+def load_prot_ipro():
+    proteins = list()
+    ipros = list()
+    with open(DATA_ROOT + 'swissprot_ipro.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            if len(it) != 3:
+                continue
+            prot = it[1]
+            iprs = it[2].split(';')
+            proteins.append(prot)
+            ipros.append(iprs)
+    return pd.DataFrame({'proteins': proteins, 'ipros': ipros})
+
+
+def performanc_by_interpro():
+    pred_df = pd.read_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
+    ipro_df = load_prot_ipro()
+    df = pred_df.merge(ipro_df, on='proteins', how='left')
+    ipro = get_ipro()
+
+    def reshape(values):
+        values = np.hstack(values).reshape(
+            len(values), len(values[0]))
+        return values
+
+    for ipro_id in ipro:
+        if len(ipro[ipro_id]['parents']) > 0:
+            continue
+        labels = list()
+        predictions = list()
+        gos = list()
+        for i, row in df.iterrows():
+            if not isinstance(row['ipros'], list):
+                continue
+            if ipro_id in row['ipros']:
+                labels.append(row['labels'])
+                predictions.append(row['predictions'])
+                gos.append(row['gos'])
+        pr = 0
+        rc = 0
+        total = 0
+        p_total = 0
+        for i in xrange(len(labels)):
+            tp = np.sum(labels[i] * predictions[i])
+            fp = np.sum(predictions[i]) - tp
+            fn = np.sum(labels[i]) - tp
+            all_gos = set()
+            for go_id in gos[i]:
+                if go_id in all_functions:
+                    all_gos |= get_anchestors(go, go_id)
+            all_gos.discard(GO_ID)
+            all_gos -= func_set
+            fn += len(all_gos)
+            if tp == 0 and fp == 0 and fn == 0:
+                continue
+            total += 1
+            if tp != 0:
+                p_total += 1
+                precision = tp / (1.0 * (tp + fp))
+                recall = tp / (1.0 * (tp + fn))
+                pr += precision
+                rc += recall
+        if total > 0 and p_total > 0:
+            rc /= total
+            pr /= p_total
+            if pr + rc > 0:
+                f = 2 * pr * rc / (pr + rc)
+                logging.info('%s\t%d\t%f\t%f\t%f' % (
+                    ipro_id, len(labels), f, pr, rc))
 
 
 def function_centric_performance(functions, preds, labels):
@@ -410,12 +502,18 @@ def compute_roc(preds, labels):
     roc_auc = auc(fpr, tpr)
     return roc_auc
 
+def compute_mcc(preds, labels):
+    # Compute ROC curve and ROC area for each class
+    mcc = matthews_corrcoef(labels.flatten(), preds.flatten())
+    return mcc
+
 
 def compute_performance(preds, labels, gos):
     preds = np.round(preds, 2)
     f_max = 0
     p_max = 0
     r_max = 0
+    t_max = 0
     for t in xrange(1, 100):
         threshold = t / 100.0
         predictions = (preds > threshold).astype(np.int32)
@@ -454,8 +552,65 @@ def compute_performance(preds, labels, gos):
                 f_max = f
                 p_max = p
                 r_max = r
+                t_max = threshold
                 predictions_max = predictions
-    return f_max, p_max, r_max, predictions_max
+    return f_max, p_max, r_max, t_max, predictions_max
+
+
+def get_gos(pred):
+    mdist = 1.0
+    mgos = None
+    for i in xrange(len(labels_gos)):
+        labels, gos = labels_gos[i]
+        dist = distance.cosine(pred, labels)
+        if mdist > dist:
+            mdist = dist
+            mgos = gos
+    return mgos
+
+
+def compute_similarity_performance(train_df, test_df, preds):
+    logging.info("Computing similarity performance")
+    logging.info("Training data size %d" % len(train_df))
+    train_labels = train_df['labels'].values
+    train_gos = train_df['gos'].values
+    global labels_gos
+    labels_gos = zip(train_labels, train_gos)
+    p = Pool(64)
+    pred_gos = p.map(get_gos, preds)
+    total = 0
+    p = 0.0
+    r = 0.0
+    f = 0.0
+    test_gos = test_df['gos'].values
+    for gos, tgos in zip(pred_gos, test_gos):
+        preds = set()
+        test = set()
+        for go_id in gos:
+            if go_id in all_functions:
+                preds |= get_anchestors(go, go_id)
+        for go_id in tgos:
+            if go_id in all_functions:
+                test |= get_anchestors(go, go_id)
+        tp = len(preds.intersection(test))
+        fp = len(preds - test)
+        fn = len(test - preds)
+        if tp == 0 and fp == 0 and fn == 0:
+            continue
+        total += 1
+        if tp != 0:
+            precision = tp / (1.0 * (tp + fp))
+            recall = tp / (1.0 * (tp + fn))
+            p += precision
+            r += recall
+            f += 2 * precision * recall / (precision + recall)
+    return f / total, p / total, r / total
+
+
+def print_report(report, go_id):
+    with open(DATA_ROOT + 'reports.txt', 'a') as f:
+        f.write('Classification report for ' + go_id + '\n')
+        f.write(report + '\n')
 
 
 if __name__ == '__main__':

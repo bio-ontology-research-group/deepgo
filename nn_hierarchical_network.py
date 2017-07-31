@@ -35,7 +35,7 @@ from collections import deque
 import time
 import logging
 import tensorflow as tf
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, matthews_corrcoef
 from scipy.spatial import distance
 from multiprocessing import Pool
 
@@ -194,9 +194,9 @@ def get_node_name(go_id, unique=False):
 
 def get_function_node(name, inputs):
     output_name = name + '_out'
-    net = Dense(256, name=name, activation='relu')(inputs)
-    output = Dense(1, name=output_name, activation='sigmoid')(net)
-    return net, output
+    # net = Dense(256, name=name, activation='relu')(inputs)
+    output = Dense(1, name=output_name, activation='sigmoid')(inputs)
+    return output, output
 
 
 def get_layers_recursive(inputs, node_output_dim=256):
@@ -253,15 +253,15 @@ def get_layers(inputs):
     while len(q) > 0:
         node_id, net = q.popleft()
         parent_nets = [inputs]
-        for p_id in get_parents(go, node_id):
-            if p_id in func_set:
-                parent_nets.append(layers[p_id]['net'])
-        if len(parent_nets) > 1:
-            name = get_node_name(node_id) + '_parents'
-            net = merge(
-                parent_nets, mode='concat', concat_axis=1, name=name)
+        # for p_id in get_parents(go, node_id):
+        #     if p_id in func_set:
+        #         parent_nets.append(layers[p_id]['net'])
+        # if len(parent_nets) > 1:
+        #     name = get_node_name(node_id) + '_parents'
+        #     net = merge(
+        #         parent_nets, mode='concat', concat_axis=1, name=name)
         name = get_node_name(node_id)
-        net, output = get_function_node(name, net)
+        net, output = get_function_node(name, inputs)
         if node_id not in layers:
             layers[node_id] = {'net': net, 'output': output}
             for n_id in go[node_id]['children']:
@@ -293,7 +293,8 @@ def get_model():
     merged = merge(
         [feature_model, inputs2], mode='concat',
         concat_axis=1, name='merged')
-    layers = get_layers(merged)
+    net = Dense(1024, activation='relu')(merged)
+    layers = get_layers(net)
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
@@ -328,7 +329,6 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    # pre_model_path = DATA_ROOT + 'pre_model_weights_' + FUNCTION + '.pkl'
     model_path = DATA_ROOT + 'model_' + FUNCTION + '.h5'
     checkpointer = ModelCheckpoint(
         filepath=model_path,
@@ -375,8 +375,10 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     logging.info('Computing performance')
     f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
+    mcc = compute_mcc(preds_max, test_labels)
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
+    logging.info('MCC: \t %f ' % (mcc, ))
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
     # proteins = test_df['proteins']
@@ -503,6 +505,11 @@ def compute_roc(preds, labels):
     fpr, tpr, _ = roc_curve(labels.flatten(), preds.flatten())
     roc_auc = auc(fpr, tpr)
     return roc_auc
+
+def compute_mcc(preds, labels):
+    # Compute ROC curve and ROC area for each class
+    mcc = matthews_corrcoef(labels.flatten(), preds.flatten())
+    return mcc
 
 
 def compute_performance(preds, labels, gos):
