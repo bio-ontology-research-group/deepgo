@@ -257,7 +257,8 @@ class DataGenerator(object):
             #     for i in range(self.num_outputs):
             #         output.append(
             #             labels[self.start:(self.start + self.batch_size), i])
-            labels = self.targets[self.start:(self.start + self.batch_size), :]
+            if self.has_targets:
+                labels = self.targets[self.start:(self.start + self.batch_size), :]
             if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
                 res_inputs = []
                 for inp in self.inputs:

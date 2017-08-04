@@ -7,7 +7,7 @@ python predict.py
 import numpy as np
 import pandas as pd
 import click as ck
-from keras.models import model_from_json
+from keras.models import load_model
 from keras.optimizers import RMSprop
 from utils import (
     get_gene_ontology,
@@ -34,7 +34,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/cafa3/done/'
+DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -109,38 +109,22 @@ def model(model_name):
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Data size: %d" % len(data[0]))
     logging.info('Loading the model')
-    with open(DATA_ROOT + model_name + '_' + FUNCTION + '.json', 'r') as f:
-        json_string = next(f)
-    model = model_from_json(json_string)
-
-    optimizer = RMSprop()
-    model.compile(
-        optimizer=optimizer,
-        loss='binary_crossentropy')
-
-    model_path = DATA_ROOT + model_name + '_weights_' + FUNCTION + '.pkl'
-    logging.info(
-        'Compilation finished in %d sec' % (time.time() - start_time))
-    logging.info('Loading weights')
-    load_model_weights(model, model_path)
+    model = load_model(DATA_ROOT + model_name + '_' + FUNCTION + '.h5')
 
     logging.info('Predicting')
     preds = model.predict_generator(
-        data_generator, val_samples=len(data[0]), nb_worker=12)
-    for i in xrange(len(preds)):
-        preds[i] = preds[i].reshape(-1, 1)
-    preds = np.concatenate(preds, axis=1)
-
-    incon = 0
-    for i in xrange(len(data)):
-        for j in xrange(len(functions)):
-            anchestors = get_anchestors(go, functions[j])
-            for p_id in anchestors:
-                if (p_id not in [GO_ID, functions[j]] and
-                        preds[i, go_indexes[p_id]] < preds[i, j]):
-                    incon += 1
-                    preds[i, go_indexes[p_id]] = preds[i, j]
-    logging.info('Inconsistent predictions: %d' % incon)
+        data_generator, val_samples=len(data[0]))
+    
+    # incon = 0
+    # for i in xrange(len(data)):
+    #    for j in xrange(len(functions)):
+    #         anchestors = get_anchestors(go, functions[j])
+    #         for p_id in anchestors:
+    #             if (p_id not in [GO_ID, functions[j]] and
+    #                     preds[i, go_indexes[p_id]] < preds[i, j]):
+    #                 incon += 1
+    #                 preds[i, go_indexes[p_id]] = preds[i, j]
+    # logging.info('Inconsistent predictions: %d' % incon)
 
     predictions = list()
     for i in xrange(len(targets)):

@@ -2,13 +2,14 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
+import os
 import numpy as np
 import click as ck
 import pandas as pd
 from utils import get_gene_ontology, get_go_set, get_anchestors, FUNC_DICT
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, matthews_corrcoef
 
-DATA_ROOT = 'data/cafa3/done3/'
+DATA_ROOT = 'data/swiss/'
 
 @ck.command()
 @ck.option('--function', default='mf', help='Function')
@@ -28,8 +29,28 @@ def main(function):
     global all_functions
     all_functions = get_go_set(go, GO_ID)
     pred_df = pd.read_pickle(DATA_ROOT + 'model_preds_' + function + '.pkl')
+    # FFPred preds
+    preds_dict = {}
+    # files = os.listdir('data/ffpred/')
+    # for fl in files:
+    with open('data/gofdr/predictions.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            target_id = it[0]
+            if function[1].upper() != it[2]:
+                continue
+            if target_id not in preds_dict:
+                preds_dict[target_id] = list()
+            preds_dict[target_id].append((it[1], float(it[3])))
+    target_ids = list()
+    predictions = list()
+    for key, val in preds_dict.iteritems():
+        target_ids.append(key)
+        predictions.append(val)
+    pred_df = pd.DataFrame({'targets': target_ids, 'predictions': predictions})
+
     targets = dict()
-    with open('data/cafa3/CAFA3_benchmark20170605/groundtruth/leafonly_MFO_unique.txt') as f:
+    with open('data/cafa3/CAFA3_benchmark20170605/groundtruth/leafonly_' + function.upper() +'O_unique.txt') as f:
         for line in f:
             it = line.strip().split('\t')
             target = it[0]
@@ -45,14 +66,14 @@ def main(function):
         for go_id in gos:
             if go_id in all_functions:
                 go_set |= get_anchestors(go, go_id)
-        label = np.zeros((len(functions),), dtype=np.int32)
-        for go_id in go_set:
-            if go_id in func_index:
-                label[func_index[go_id]] = 1
+        # label = np.zeros((len(functions),), dtype=np.int32)
+        # for go_id in go_set:
+        #     if go_id in func_index:
+        #         label[func_index[go_id]] = 1
         target_ids.append(target)
         go_ids.append(go_set)
-        labels.append(label)
-    df = pd.DataFrame({'targets': target_ids, 'gos': go_ids, 'labels': labels})
+        # labels.append(label)
+    df = pd.DataFrame({'targets': target_ids, 'gos': go_ids})
     df = pd.merge(df, pred_df, on='targets', how='inner')
 
     def reshape(values):
@@ -60,13 +81,44 @@ def main(function):
             len(values), len(values[0]))
         return values
 
-    preds = reshape(df['predictions'].values)
-    labels = reshape(df['labels'].values)
+    # preds = reshape(df['predictions'].values)
+    # labels = reshape(df['labels'].values)
+    preds = df['predictions'].values
     gos = df['gos'].values
-    f, p, r, t, preds_max = compute_performance(preds, labels, gos)
-    roc_auc = compute_roc(preds, labels)
-    print(roc_auc)
+    f, p, r, t, preds_max = compute_performance(preds, None, gos)
     print(f, p, r)
+    labels = list()
+    scores = list()
+    for i in range(len(preds)):
+        all_gos = set()
+        for go_id in gos[i]:
+            if go_id in all_functions:
+                all_gos |= get_anchestors(go, go_id)
+        all_gos.discard(GO_ID)
+        scores_dict = {}
+        for val in preds[i]:
+            go_id, score = val
+            if go_id in all_functions:
+                go_set = get_anchestors(go, go_id)
+                for g_id in go_set:
+                    if g_id not in scores_dict or scores_dict[g_id] < score:
+                        scores_dict[g_id] = score
+        all_preds = set(scores_dict)
+        all_preds.discard(GO_ID)
+        for go_id in all_preds:
+            scores.append(scores_dict[go_id])
+            if go_id in all_gos:
+                labels.append(1)
+            else:
+                labels.append(0)
+        
+    scores = np.array(scores)
+    labels = np.array(labels)
+    roc_auc = compute_roc(scores, labels)
+    print(roc_auc)
+    preds_max = (scores > t).astype(np.int32)
+    mcc = compute_mcc(preds_max, labels)
+    print(mcc)
 
 
 def compute_roc(preds, labels):
@@ -75,32 +127,50 @@ def compute_roc(preds, labels):
     roc_auc = auc(fpr, tpr)
     return roc_auc
 
+
+def compute_mcc(preds, labels):
+    # Compute ROC curve and ROC area for each class
+    mcc = matthews_corrcoef(labels.flatten(), preds.flatten())
+    return mcc
+
     
 def compute_performance(preds, labels, gos):
-    preds = np.round(preds, decimals=2)
+    # preds = np.round(preds, decimals=2)
     f_max = 0
     p_max = 0
     r_max = 0
     t_max = 0
     for t in xrange(1, 100):
         threshold = t / 100.0
-        predictions = (preds > threshold).astype(np.int32)
+        # predictions = (preds > threshold).astype(np.int32)
+        predictions = list()
         total = 0
         f = 0.0
         p = 0.0
         r = 0.0
         p_total = 0
-        for i in range(labels.shape[0]):
-            tp = np.sum(predictions[i, :] * labels[i, :])
-            fp = np.sum(predictions[i, :]) - tp
-            fn = np.sum(labels[i, :]) - tp
+        for i in range(preds.shape[0]):
+            # tp = np.sum(predictions[i, :] * labels[i, :])
+            # fp = np.sum(predictions[i, :]) - tp
+            # fn = np.sum(labels[i, :]) - tp
             all_gos = set()
+            all_preds = set()
             for go_id in gos[i]:
                 if go_id in all_functions:
                     all_gos |= get_anchestors(go, go_id)
             all_gos.discard(GO_ID)
-            all_gos -= func_set
-            fn += len(all_gos)
+            for val in preds[i]:
+                go_id, score = val
+                if score > threshold and go_id in go:
+                    all_preds |= get_anchestors(go, go_id)
+            all_preds.discard(GO_ID)
+            predictions.append(all_preds)
+            tp = len(all_gos.intersection(all_preds))
+            fp = len(all_preds) - tp
+            fn = len(all_gos) - tp
+            # all_gos -= func_set
+            # fn += len(all_gos)
+            
             if tp == 0 and fp == 0 and fn == 0:
                 continue
             total += 1

@@ -375,6 +375,8 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('MCC: \t %f ' % (mcc, ))
+    print('%.3f & %.3f & %.3f & %.3f & %.3f' % (
+        f, p, r, roc_auc, mcc))
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
     # proteins = test_df['proteins']
@@ -526,13 +528,13 @@ def compute_performance(preds, labels, gos):
             tp = np.sum(predictions[i, :] * labels[i, :])
             fp = np.sum(predictions[i, :]) - tp
             fn = np.sum(labels[i, :]) - tp
-            # all_gos = set()
-            # for go_id in gos[i]:
-            #     if go_id in all_functions:
-            #         all_gos |= get_anchestors(go, go_id)
-            # all_gos.discard(GO_ID)
-            # all_gos -= func_set
-            # fn += len(all_gos)
+            all_gos = set()
+            for go_id in gos[i]:
+                if go_id in all_functions:
+                    all_gos |= get_anchestors(go, go_id)
+            all_gos.discard(GO_ID)
+            all_gos -= func_set
+            fn += len(all_gos)
             if tp == 0 and fp == 0 and fn == 0:
                 continue
             total += 1

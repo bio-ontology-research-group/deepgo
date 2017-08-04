@@ -182,7 +182,7 @@ def get_data():
         'ngrams': ngrams,
         'orgs': orgs})
     print(len(df))
-    embed_df = pd.read_pickle('data/graph_embeddings.pkl')
+    embed_df = pd.read_pickle('data/graph_new_embeddings_proteins.pkl')
 
     df = pd.merge(df, embed_df, on='proteins', how='left')
 
@@ -193,7 +193,7 @@ def get_data():
             missing_rep += 1
     print(missing_rep)
 
-    df.to_pickle('data/cafa3/targets.pkl')
+    df.to_pickle('data/swiss/targets.pkl')
 
 
 def cafa2string():
@@ -435,11 +435,11 @@ def compute_performance():
 
 def main(*args, **kwargs):
     # specific_predictions()
-    get_predictions()
-    merged_annotations()
+    # get_predictions()
+    # merged_annotations()
     # compute_performance()
     # get_results('model_seq')
-    # get_data()
+    get_data()
     # cafa3()
     # fasta2tabs()
     # cafa2string()

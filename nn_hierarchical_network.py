@@ -44,7 +44,7 @@ config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 K.set_session(sess)
 
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.ERROR)
 sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/swiss/'
@@ -93,11 +93,26 @@ def main(function, device, org, train):
     global node_names
     node_names = set()
     with tf.device('/' + device):
-        model(is_train=train)
+        params = {
+            'fc_output': 1024,
+            'learning_rate': 0.001,
+            'embedding_dims': 128,
+            'embedding_dropout': 0.2,
+            'filter_length': 128,
+            'nb_filter': 32,
+            'pool_length': 64,
+            'stride': 32
+        }
+        for dims in [64, 128, 256, 512]:
+            for nb_filter in [16, 32, 64, 128]:
+                params['embedding_dims'] = dims
+                params['nb_filter'] = nb_filter
+                f = model(params, is_train=train)
+                print(dims, nb_filter, f)
     # performanc_by_interpro()
 
 
-def load_data():
+def load_data(org=None):
 
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
@@ -106,13 +121,14 @@ def load_data():
     train_df = df.loc[index[:valid_n]]
     valid_df = df.loc[index[valid_n:]]
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
-    if ORG is not None:
+    # test_df = pd.read_pickle(DATA_ROOT + 'targets.pkl')
+    if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
-        test_df = test_df[test_df['orgs'] == ORG]
+        test_df = test_df[test_df['orgs'] == org]
         logging.info('Filtered test size: %d' % len(test_df))
 
     # Filter by type
-    # org_df = pd.read_pickle('data/prokaryotes.pkl')
+    # org_df = pd.read_pickle('data/eukaryotes.pkl')
     # orgs = org_df['orgs']
     # test_df = test_df[test_df['orgs'].isin(orgs)]
 
@@ -129,7 +145,6 @@ def load_data():
         return values - mn
 
     def get_values(data_frame):
-        print(data_frame['labels'].values.shape)
         labels = reshape(data_frame['labels'].values)
         ngrams = sequence.pad_sequences(
             data_frame['ngrams'].values, maxlen=MAXLEN)
@@ -145,22 +160,23 @@ def load_data():
     return train, valid, test, train_df, valid_df, test_df
 
 
-def get_feature_model():
-    embedding_dims = 128
+def get_feature_model(params):
+    embedding_dims = params['embedding_dims']
     max_features = 8001
     model = Sequential()
     model.add(Embedding(
         max_features,
         embedding_dims,
         input_length=MAXLEN,
-        dropout=0.2))
+        dropout=params['embedding_dropout']))
     model.add(Convolution1D(
-        nb_filter=32,
-        filter_length=128,
+        nb_filter=params['nb_filter'],
+        filter_length=params['filter_length'],
         border_mode='valid',
         activation='relu',
         subsample_length=1))
-    model.add(MaxPooling1D(pool_length=64, stride=32))
+    model.add(MaxPooling1D(
+        pool_length=params['pool_length'], stride=params['stride']))
     model.add(Flatten())
     return model
 
@@ -285,15 +301,15 @@ def get_layers(inputs):
     return layers
 
 
-def get_model():
+def get_model(params):
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
-    feature_model = get_feature_model()(inputs)
+    feature_model = get_feature_model(params)(inputs)
     merged = merge(
         [feature_model, inputs2], mode='concat',
         concat_axis=1, name='merged')
-    net = Dense(1024, activation='relu')(merged)
+    net = Dense(params['fc_output'], activation='relu')(merged)
     layers = get_layers(net)
     output_models = []
     for i in range(len(functions)):
@@ -303,7 +319,7 @@ def get_model():
     # net = Dense(len(functions), activation='sigmoid')(net)
     model = Model(input=[inputs, inputs2], output=net)
     logging.info('Compiling the model')
-    optimizer = RMSprop()
+    optimizer = RMSprop(lr=params['learning_rate'])
 
     model.compile(
         optimizer=optimizer,
@@ -313,7 +329,7 @@ def get_model():
     return model
 
 
-def model(batch_size=128, nb_epoch=100, is_train=True):
+def model(params, batch_size=128, nb_epoch=6, is_train=True):
     # set parameters:
     nb_classes = len(functions)
     start_time = time.time()
@@ -329,7 +345,9 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    model_path = DATA_ROOT + 'model_' + FUNCTION + '.h5'
+    model_path = (DATA_ROOT + 'model_' + FUNCTION +
+                  '-' + str(params['embedding_dims']) +
+                  '-' + str(params['nb_filter']) + '.h5')
     checkpointer = ModelCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True)
@@ -345,7 +363,7 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     test_generator.fit(test_data, test_labels)
 
     if is_train:
-        model = get_model()
+        model = get_model(params)
         model.fit_generator(
             train_generator,
             samples_per_epoch=len(train_data[0]),
@@ -358,20 +376,18 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     logging.info('Loading best model')
     model = load_model(model_path)
 
-    logging.info('Predicting')
+    # orgs = ['9606', '10090', '10116', '7227', '7955',
+    #         '559292', '3702', '284812', '6239',
+    #         '83333', '83332', '224308', '208964']
+    # for org in orgs:
+    #     logging.info('Predicting for %s' % (org,))
+    #     train, val, test, train_df, valid_df, test_df = load_data(org=org)
+    #     test_data, test_labels = test
+    #     test_gos = test_df['gos'].values
+    #     test_generator = DataGenerator(batch_size, nb_classes)
+    #     test_generator.fit(test_data, test_labels)
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data[0]))
-    # incon = 0
-    # for i in xrange(len(test_data)):
-    #     for j in xrange(len(functions)):
-    #         childs = set(go[functions[j]]['children']).intersection(func_set)
-    #         ok = True
-    #         for n_id in childs:
-    #             if preds[i, j] < preds[i, go_indexes[n_id]]:
-    #                 preds[i, j] = preds[i, go_indexes[n_id]]
-    #                 ok = False
-    #         if not ok:
-    #             incon += 1
     logging.info('Computing performance')
     f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
@@ -379,6 +395,9 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('MCC: \t %f ' % (mcc, ))
+    print('%.3f & %.3f & %.3f & %.3f & %.3f' % (
+        f, p, r, roc_auc, mcc))
+    return f
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
     # proteins = test_df['proteins']

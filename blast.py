@@ -13,13 +13,13 @@ DATA_ROOT = 'data/swiss/'
 @ck.command()
 @ck.option('--function', default='mf', help='Function')
 def main(function):
-    fill_missing(function)
-    # f, p, r = compute_performance('bp')
-    # print(f, p, r)
-    # f, p, r = compute_performance('mf')
-    # print(f, p, r)
-    # f, p, r = compute_performance('cc')
-    # print(f, p, r)
+    # fill_missing(function)
+    f, p, r = compute_performance('bp')
+    print('%.3f & %.3f & %.3f' % (f, p, r))
+    f, p, r = compute_performance('mf')
+    print('%.3f & %.3f & %.3f' % (f, p, r))
+    f, p, r = compute_performance('cc')
+    print('%.3f & %.3f & %.3f' % (f, p, r))
 
 
 def compute_performance(func):
@@ -34,14 +34,14 @@ def compute_performance(func):
         for go_id in row['gos']:
             if go_id in go:
                 go_set |= get_anchestors(go, go_id)
-        train_labels[row['proteins']] = go_set
+        train_labels[row['proteins']] = row['labels']
 
     for i, row in test_df.iterrows():
         go_set = set()
         for go_id in row['gos']:
             if go_id in go:
                 go_set |= get_anchestors(go, go_id)
-        test_labels[row['proteins']] = go_set
+        test_labels[row['proteins']] = row['labels']
 
     preds = list()
     test = list()
@@ -57,12 +57,12 @@ def compute_performance(func):
     f = 0.0
     p_total = 0
     for label, pred in zip(test, preds):
-        # tp = np.sum(label * pred)
-        # fp = np.sum(pred) - tp
-        # fn = np.sum(label) - tp
-        tp = len(label.intersection(pred))
-        fp = len(pred) - tp
-        fn = len(label) - tp
+        tp = np.sum(label * pred)
+        fp = np.sum(pred) - tp
+        fn = np.sum(label) - tp
+        # tp = len(label.intersection(pred))
+        # fp = len(pred) - tp
+        # fn = len(label) - tp
 
         if tp == 0 and fp == 0 and fn == 0:
             continue
