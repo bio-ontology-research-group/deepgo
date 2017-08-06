@@ -11,7 +11,7 @@ from utils import (
 from aaindex import is_ok
 import click as ck
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/clusters/'
 
 
 @ck.command()
@@ -128,12 +128,16 @@ def run(*args, **kwargs):
             row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
     print('Missing network reps:', missing_rep)
-    index = df.index.values
-    np.random.seed(seed=0)
-    np.random.shuffle(index)
-    train_n = int(len(df) * SPLIT)
-    train_df = df.loc[index[:train_n]]
-    test_df = df.loc[index[train_n:]]
+    # index = df.index.values
+    # np.random.seed(seed=0)
+    # np.random.shuffle(index)
+    # train_n = int(len(df) * SPLIT)
+    # train_df = df.loc[index[:train_n]]
+    # test_df = df.loc[index[train_n:]]
+    prots_df = pd.read_pickle('data/swiss/clusters.pkl')
+    train_df = df[df['proteins'].isin(prots_df['proteins'])]
+    test_df = df[~df['proteins'].isin(prots_df['proteins'])]
+    print(len(train_df), len(test_df))
     train_df.to_pickle(DATA_ROOT + 'train-' + FUNCTION + '.pkl')
     test_df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '.pkl')
 

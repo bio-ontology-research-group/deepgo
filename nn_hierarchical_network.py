@@ -103,12 +103,13 @@ def main(function, device, org, train):
             'pool_length': 64,
             'stride': 32
         }
-        for dims in [64, 128, 256, 512]:
-            for nb_filter in [16, 32, 64, 128]:
-                params['embedding_dims'] = dims
-                params['nb_filter'] = nb_filter
-                f = model(params, is_train=train)
-                print(dims, nb_filter, f)
+        model(params, is_train=train)
+    #     for dims in [64, 128, 256, 512]:
+    #         for nb_filter in [16, 32, 64, 128]:
+    #             params['embedding_dims'] = dims
+    #             params['nb_filter'] = nb_filter
+    #             f = model(params, is_train=train)
+    #             print(dims, nb_filter, f)
     # performanc_by_interpro()
 
 
@@ -345,9 +346,9 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    model_path = (DATA_ROOT + 'model_' + FUNCTION +
-                  '-' + str(params['embedding_dims']) +
-                  '-' + str(params['nb_filter']) + '.h5')
+    model_path = (DATA_ROOT + 'models/model_' + FUNCTION + '.h5')
+                  # '-' + str(params['embedding_dims']) +
+                  # '-' + str(params['nb_filter']) + '.h5')
     checkpointer = ModelCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True)
@@ -397,21 +398,21 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info('MCC: \t %f ' % (mcc, ))
     print('%.3f & %.3f & %.3f & %.3f & %.3f' % (
         f, p, r, roc_auc, mcc))
-    return f
+    # return f
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
-    # proteins = test_df['proteins']
-    # predictions = list()
-    # for i in xrange(preds_max.shape[0]):
-    #     predictions.append(preds_max[i])
-    # df = pd.DataFrame(
-    #     {
-    #         'proteins': proteins, 'predictions': predictions,
-    #         'gos': test_df['gos'], 'labels': test_df['labels']})
-    # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-predictions.pkl')
+    proteins = test_df['proteins']
+    predictions = list()
+    for i in xrange(preds_max.shape[0]):
+        predictions.append(preds_max[i])
+    df = pd.DataFrame(
+        {
+            'proteins': proteins, 'predictions': predictions,
+            'gos': test_df['gos'], 'labels': test_df['labels']})
+    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
     # logging.info('Done in %d sec' % (time.time() - start_time))
 
-    # function_centric_performance(functions, preds.T, test_labels.T)
+    function_centric_performance(functions, preds.T, test_labels.T)
 
 
 def load_prot_ipro():

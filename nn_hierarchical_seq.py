@@ -325,7 +325,7 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     logging.info("Validation data size: %d" % len(val_data))
     logging.info("Test data size: %d" % len(test_data))
 
-    model_path = DATA_ROOT + 'model_seq_' + FUNCTION + '.h5'
+    model_path = DATA_ROOT + 'models/model_seq_' + FUNCTION + '.h5'
     checkpointer = ModelCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True)
@@ -390,7 +390,7 @@ def model(batch_size=128, nb_epoch=100, is_train=True):
     # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-predictions.pkl')
     # logging.info('Done in %d sec' % (time.time() - start_time))
 
-    # function_centric_performance(functions, preds.T, test_labels.T)
+    function_centric_performance(functions, preds.T, test_labels.T)
 
 
 def load_prot_ipro():

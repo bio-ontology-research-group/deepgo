@@ -8,29 +8,37 @@ import pandas as pd
 from sklearn import cluster
 
 
-DATA_ROOT = 'data/blast/'
+DATA_ROOT = 'data/clusters/'
 
 @ck.command()
 @ck.option('--function',
            default='mf',
            help='Function (mf, bp, cc)')
-def main(function):
+@ck.option('--threshold',
+           default=0.5,
+           help='Threshold for including protein to cluster')
+def main(function, threshold):
     global FUNCTION
     FUNCTION = function
-    data, prots = load_data()
-    cls = cluster.AgglomerativeClustering(
-        n_clusters=100, affinity='precomputed', linkage='complete')
-    results = cls.fit_predict(data)
-    print(results)
+    data, prots = load_data(threshold)
+    print('Proteins:', len(prots))
+    df = pd.DataFrame({'proteins': prots})
+    df.to_pickle(DATA_ROOT + 'clusters.pkl')
 
-def load_data():
+
+def load_data(threshold):
     sim = {}
-    with open(DATA_ROOT + FUNCTION + '.blst') as f:
+    with open(DATA_ROOT + 'swiss.blst') as f:
+        next(f)
         for line in f:
             it = line.strip().split('\t')
             prot1 = it[0]
             prot2 = it[1]
-            score = int(it[2])
+            if prot1 == prot2:
+                continue
+            score = float(it[2]) / 100.0
+            if score < threshold:
+                continue
             if prot1 not in sim:
                 sim[prot1] = {}
             sim[prot1][prot2] = score
@@ -39,21 +47,13 @@ def load_data():
             sim[prot2][prot1] = score
     prots = sim.keys()
     n = len(prots)
-    X = np.ndarray((n, n), dtype=np.float32)
+    X = np.zeros((n, n), dtype=np.float32)
     for i in xrange(n):
         for j in xrange(i + 1, n):
             if prots[j] in sim[prots[i]]:
                 score = sim[prots[i]][prots[j]]
-            else:
-                score = 0.0
-            X[i, j] = score
-            X[j, i] = score
-    mx = np.max(X)
-    X = X / mx
-    for i in xrange(n):
-        X[i, i] = 1.0
-    X = 1 - X
-    print(X.shape, X)
+                X[i, j] = score
+                X[j, i] = score
     return (X, prots)
 
 if __name__ == '__main__':

@@ -14,12 +14,13 @@ DATA_ROOT = 'data/swiss/'
 @ck.option('--function', default='mf', help='Function')
 def main(function):
     # fill_missing(function)
-    f, p, r = compute_performance('bp')
-    print('%.3f & %.3f & %.3f' % (f, p, r))
-    f, p, r = compute_performance('mf')
-    print('%.3f & %.3f & %.3f' % (f, p, r))
-    f, p, r = compute_performance('cc')
-    print('%.3f & %.3f & %.3f' % (f, p, r))
+    # f, p, r = compute_performance('bp')
+    # print('%.3f & %.3f & %.3f' % (f, p, r))
+    # f, p, r = compute_performance('mf')
+    # print('%.3f & %.3f & %.3f' % (f, p, r))
+    # f, p, r = compute_performance('cc')
+    # print('%.3f & %.3f & %.3f' % (f, p, r))
+    convert('')
 
 
 def compute_performance(func):
@@ -80,20 +81,20 @@ def compute_performance(func):
 
 
 def convert(function):
-    df = pd.read_pickle(DATA_ROOT + 'test-' + function + '.pkl')
-    f1 = open(DATA_ROOT + 'test-' + function + '.fa', 'w')
-    f2 = open(DATA_ROOT + 'test-missing-' + function + '.fa', 'w')
+    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
+    f1 = open(DATA_ROOT + 'swissprot_exp.fa', 'w')
+    # f2 = open(DATA_ROOT + 'test-missing.fa', 'w')
 
     for i, row in df.iterrows():
-        missing = np.sum(row['embeddings']) == 0
-        if not missing:
-            f1.write('>' + row['proteins'] + '\n')
-            f1.write(to_fasta(str(row['sequences'])))
-        else:
-            f2.write('>' + row['proteins'] + '\n')
-            f2.write(to_fasta(str(row['sequences'])))
+        # missing = np.sum(row['embeddings']) == 0
+        # if not missing:
+        f1.write('>' + row['proteins'] + '\n')
+        f1.write(to_fasta(str(row['sequences'])))
+        #else:
+        #    f2.write('>' + row['proteins'] + '\n')
+        #    f2.write(to_fasta(str(row['sequences'])))
     f1.close()
-    f2.close()
+    #f2.close()
 
 
 def to_fasta(sequence):
