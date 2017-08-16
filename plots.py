@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import click as ck
 from sklearn.metrics import roc_curve, auc
+import matplotlib as mpl
+mpl.use('Agg')
 from matplotlib import pyplot as plt
 import math
 from utils import (
@@ -14,17 +16,67 @@ from utils import (
     MOLECULAR_FUNCTION,
     CELLULAR_COMPONENT,
     get_ipro,
+    EXP_CODES
 )
 
-DATA_ROOT = 'data/swissexp/'
+DATA_ROOT = 'data/swiss/'
 
 
 @ck.command()
 def main():
     # x, y = get_data('cc.res')
     # plot(x, y)
-    ipro_table()
+    # ipro_table()
+    plot_sequence_stats()
 
+def read_fasta(filename):
+    data = list()
+    c = 0
+    with open(filename, 'r') as f:
+        seq = ''
+        for line in f:
+            line = line.strip()
+            if line.startswith('>'):
+                if seq != '':
+                    data.append(seq)
+                line = line[1:].split()[0].split('|')
+                line = line[1] + '\t' + line[2]
+                seq = line + '\t'
+            else:
+                seq += line
+        data.append(seq)
+    return data
+
+def plot_sequence_stats():
+    df = pd.read_pickle('data/swissprot.pkl')
+    index = list()
+    for i, row in df.iterrows():
+        ok = False
+        for it in row['annots']:
+            it = it.split('|')
+            if it[1] in EXP_CODES:
+                ok = True
+        if ok:
+            index.append(i)
+    df = df.iloc[index]
+    print(len(df))
+    lens = map(len, df['sequences'])
+    c = 0
+    for i in lens:
+        if i <= 1002:
+            c += 1
+    print(c)
+    h = np.histogram(lens, bins=(
+        0, 500, 1000, 1500, 2000, 40000))
+    plt.bar(range(5),
+        h[0], width=1, facecolor='green')
+    titles = ['<=500', '<=1000', '<=1500', '<=2000', '>2000']
+    plt.xticks(np.arange(0.5, 5.5, 1), titles)
+    plt.xlabel('Sequence length')
+    plt.ylabel('Sequence number')
+    plt.title(r'Sequence length distribution')
+    plt.savefig('sequence-dist.eps')
+    print(np.max(lens))
 
 def table():
     bp = get_data('bp.res')

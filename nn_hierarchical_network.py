@@ -118,10 +118,12 @@ def load_data(org=None):
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
     index = df.index.values
-    valid_n = int(n * 0.8)
-    train_df = df.loc[index[:valid_n]]
-    valid_df = df.loc[index[valid_n:]]
+    # valid_n = int(n * 0.8)
+    # train_df = df.loc[index[:valid_n]]
+    # valid_df = df.loc[index[valid_n:]]
+    train_df = df
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
+    valid_df = test_df
     # test_df = pd.read_pickle(DATA_ROOT + 'targets.pkl')
     if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
@@ -346,7 +348,7 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    model_path = (DATA_ROOT + 'models/model_' + FUNCTION + '.h5')
+    model_path = (DATA_ROOT + 'models/model_all_' + FUNCTION + '.h5')
                   # '-' + str(params['embedding_dims']) +
                   # '-' + str(params['nb_filter']) + '.h5')
     checkpointer = ModelCheckpoint(

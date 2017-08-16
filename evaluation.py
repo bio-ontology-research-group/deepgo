@@ -42,6 +42,7 @@ def main(function):
             if target_id not in preds_dict:
                 preds_dict[target_id] = list()
             preds_dict[target_id].append((it[1], float(it[3])))
+    print(len(preds_dict))
     target_ids = list()
     predictions = list()
     for key, val in preds_dict.iteritems():
@@ -103,10 +104,13 @@ def main(function):
                 for g_id in go_set:
                     if g_id not in scores_dict or scores_dict[g_id] < score:
                         scores_dict[g_id] = score
-        all_preds = set(scores_dict)
+        all_preds = set(scores_dict) # | all_gos
         all_preds.discard(GO_ID)
         for go_id in all_preds:
-            scores.append(scores_dict[go_id])
+            if go_id in scores_dict:
+                scores.append(scores_dict[go_id])
+            else:
+                scores.append(0)
             if go_id in all_gos:
                 labels.append(1)
             else:
@@ -161,7 +165,7 @@ def compute_performance(preds, labels, gos):
             all_gos.discard(GO_ID)
             for val in preds[i]:
                 go_id, score = val
-                if score > threshold and go_id in go:
+                if score > threshold and go_id in all_functions:
                     all_preds |= get_anchestors(go, go_id)
             all_preds.discard(GO_ID)
             predictions.append(all_preds)

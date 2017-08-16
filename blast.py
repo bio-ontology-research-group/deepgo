@@ -81,15 +81,18 @@ def compute_performance(func):
 
 
 def convert(function):
-    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
-    f1 = open(DATA_ROOT + 'swissprot_exp.fa', 'w')
+    df = pd.read_pickle('data/' + 'sequence_embeddings.pkl')
+    f1 = open(DATA_ROOT + 'embeddings.fa', 'w')
     # f2 = open(DATA_ROOT + 'test-missing.fa', 'w')
-
+    seqs = set()
     for i, row in df.iterrows():
         # missing = np.sum(row['embeddings']) == 0
         # if not missing:
-        f1.write('>' + row['proteins'] + '\n')
-        f1.write(to_fasta(str(row['sequences'])))
+        seq = row['sequences']
+        if seq not in seqs:
+            seqs.add(seq)
+            f1.write('>' + row['accessions'] + '\n')
+            f1.write(to_fasta(str(seq)))
         #else:
         #    f2.write('>' + row['proteins'] + '\n')
         #    f2.write(to_fasta(str(row['sequences'])))
