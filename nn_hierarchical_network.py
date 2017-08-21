@@ -117,14 +117,18 @@ def load_data(org=None):
 
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
     n = len(df)
-    index = df.index.values
-    # valid_n = int(n * 0.8)
-    # train_df = df.loc[index[:valid_n]]
-    # valid_df = df.loc[index[valid_n:]]
-    train_df = df
+    print(n)
+    
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
-    valid_df = test_df
-    # test_df = pd.read_pickle(DATA_ROOT + 'targets.pkl')
+    df = pd.concat([df, test_df], ignore_index=True)
+    n = len(df)
+    print(n)
+    index = df.index.values
+    valid_n = int(n * 0.95)
+    train_df = df.loc[index[:valid_n]]
+    valid_df = df.loc[index[valid_n:]]
+
+    test_df = valid_df
     if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == org]
@@ -414,7 +418,7 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
     # logging.info('Done in %d sec' % (time.time() - start_time))
 
-    function_centric_performance(functions, preds.T, test_labels.T)
+    # function_centric_performance(functions, preds.T, test_labels.T)
 
 
 def load_prot_ipro():

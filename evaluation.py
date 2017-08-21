@@ -33,22 +33,22 @@ def main(function):
     preds_dict = {}
     # files = os.listdir('data/ffpred/')
     # for fl in files:
-    with open('data/gofdr/predictions.tab') as f:
-        for line in f:
-            it = line.strip().split('\t')
-            target_id = it[0]
-            if function[1].upper() != it[2]:
-                continue
-            if target_id not in preds_dict:
-                preds_dict[target_id] = list()
-            preds_dict[target_id].append((it[1], float(it[3])))
-    print(len(preds_dict))
+    # with open('data/gofdr/predictions.tab') as f:
+    #     for line in f:
+    #         it = line.strip().split('\t')
+    #         target_id = it[0]
+    #         if function[1].upper() != it[2]:
+    #             continue
+    #         if target_id not in preds_dict:
+    #             preds_dict[target_id] = list()
+    #         preds_dict[target_id].append((it[1], float(it[3])))
+    # print(len(preds_dict))
     target_ids = list()
     predictions = list()
     for key, val in preds_dict.iteritems():
         target_ids.append(key)
         predictions.append(val)
-    pred_df = pd.DataFrame({'targets': target_ids, 'predictions': predictions})
+    # pred_df = pd.DataFrame({'targets': target_ids, 'predictions': predictions})
 
     targets = dict()
     with open('data/cafa3/CAFA3_benchmark20170605/groundtruth/leafonly_' + function.upper() +'O_unique.txt') as f:
@@ -67,60 +67,61 @@ def main(function):
         for go_id in gos:
             if go_id in all_functions:
                 go_set |= get_anchestors(go, go_id)
-        # label = np.zeros((len(functions),), dtype=np.int32)
-        # for go_id in go_set:
-        #     if go_id in func_index:
-        #         label[func_index[go_id]] = 1
+        label = np.zeros((len(functions),), dtype=np.int32)
+        for go_id in go_set:
+            if go_id in func_index:
+                label[func_index[go_id]] = 1
         target_ids.append(target)
         go_ids.append(go_set)
-        # labels.append(label)
-    df = pd.DataFrame({'targets': target_ids, 'gos': go_ids})
+        labels.append(label)
+    df = pd.DataFrame({'targets': target_ids, 'gos': go_ids, 'labels': labels})
     df = pd.merge(df, pred_df, on='targets', how='inner')
-
+    df.to_pickle(DATA_ROOT + 'model_preds_filtered_' + function + '.pkl')
+    
     def reshape(values):
         values = np.hstack(values).reshape(
             len(values), len(values[0]))
         return values
 
-    # preds = reshape(df['predictions'].values)
-    # labels = reshape(df['labels'].values)
-    preds = df['predictions'].values
+    preds = reshape(df['predictions'].values)
+    labels = reshape(df['labels'].values)
+    # preds = df['predictions'].values
     gos = df['gos'].values
-    f, p, r, t, preds_max = compute_performance(preds, None, gos)
+    f, p, r, t, preds_max = compute_performance(preds, labels, gos)
     print(f, p, r)
-    labels = list()
-    scores = list()
-    for i in range(len(preds)):
-        all_gos = set()
-        for go_id in gos[i]:
-            if go_id in all_functions:
-                all_gos |= get_anchestors(go, go_id)
-        all_gos.discard(GO_ID)
-        scores_dict = {}
-        for val in preds[i]:
-            go_id, score = val
-            if go_id in all_functions:
-                go_set = get_anchestors(go, go_id)
-                for g_id in go_set:
-                    if g_id not in scores_dict or scores_dict[g_id] < score:
-                        scores_dict[g_id] = score
-        all_preds = set(scores_dict) # | all_gos
-        all_preds.discard(GO_ID)
-        for go_id in all_preds:
-            if go_id in scores_dict:
-                scores.append(scores_dict[go_id])
-            else:
-                scores.append(0)
-            if go_id in all_gos:
-                labels.append(1)
-            else:
-                labels.append(0)
+    # labels = list()
+    # scores = list()
+    # for i in range(len(preds)):
+    #     all_gos = set()
+    #     for go_id in gos[i]:
+    #         if go_id in all_functions:
+    #             all_gos |= get_anchestors(go, go_id)
+    #     all_gos.discard(GO_ID)
+    #     scores_dict = {}
+    #     for val in preds[i]:
+    #         go_id, score = val
+    #         if go_id in all_functions:
+    #             go_set = get_anchestors(go, go_id)
+    #             for g_id in go_set:
+    #                 if g_id not in scores_dict or scores_dict[g_id] < score:
+    #                     scores_dict[g_id] = score
+    #     all_preds = set(scores_dict) # | all_gos
+    #     all_preds.discard(GO_ID)
+    #     for go_id in all_preds:
+    #         if go_id in scores_dict:
+    #             scores.append(scores_dict[go_id])
+    #         else:
+    #             scores.append(0)
+    #         if go_id in all_gos:
+    #             labels.append(1)
+    #         else:
+    #             labels.append(0)
         
-    scores = np.array(scores)
-    labels = np.array(labels)
-    roc_auc = compute_roc(scores, labels)
+    # scores = np.array(scores)
+    # labels = np.array(labels)
+    roc_auc = compute_roc(preds, labels)
     print(roc_auc)
-    preds_max = (scores > t).astype(np.int32)
+    # preds_max = (scores > t).astype(np.int32)
     mcc = compute_mcc(preds_max, labels)
     print(mcc)
 
@@ -146,34 +147,34 @@ def compute_performance(preds, labels, gos):
     t_max = 0
     for t in xrange(1, 100):
         threshold = t / 100.0
-        # predictions = (preds > threshold).astype(np.int32)
-        predictions = list()
+        predictions = (preds > threshold).astype(np.int32)
+        # predictions = list()
         total = 0
         f = 0.0
         p = 0.0
         r = 0.0
         p_total = 0
         for i in range(preds.shape[0]):
-            # tp = np.sum(predictions[i, :] * labels[i, :])
-            # fp = np.sum(predictions[i, :]) - tp
-            # fn = np.sum(labels[i, :]) - tp
+            tp = np.sum(predictions[i, :] * labels[i, :])
+            fp = np.sum(predictions[i, :]) - tp
+            fn = np.sum(labels[i, :]) - tp
             all_gos = set()
             all_preds = set()
             for go_id in gos[i]:
                 if go_id in all_functions:
                     all_gos |= get_anchestors(go, go_id)
             all_gos.discard(GO_ID)
-            for val in preds[i]:
-                go_id, score = val
-                if score > threshold and go_id in all_functions:
-                    all_preds |= get_anchestors(go, go_id)
-            all_preds.discard(GO_ID)
-            predictions.append(all_preds)
-            tp = len(all_gos.intersection(all_preds))
-            fp = len(all_preds) - tp
-            fn = len(all_gos) - tp
-            # all_gos -= func_set
-            # fn += len(all_gos)
+            # for val in preds[i]:
+            #     go_id, score = val
+            #     if score > threshold and go_id in all_functions:
+            #         all_preds |= get_anchestors(go, go_id)
+            # all_preds.discard(GO_ID)
+            # predictions.append(all_preds)
+            # tp = len(all_gos.intersection(all_preds))
+            # fp = len(all_preds) - tp
+            # fn = len(all_gos) - tp
+            all_gos -= func_set
+            fn += len(all_gos)
             
             if tp == 0 and fp == 0 and fn == 0:
                 continue
