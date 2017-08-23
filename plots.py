@@ -23,11 +23,15 @@ DATA_ROOT = 'data/swiss/'
 
 
 @ck.command()
-def main():
-    # x, y = get_data('cc.res')
+@ck.option('--function', default='mf', help='mf, cc, or bp')
+def main(function):
+    global FUNCTION
+    FUNCTION = function
+    # x, y = get_data(function + '.res')
     # plot(x, y)
-    # ipro_table()
-    plot_sequence_stats()
+    ipro_table()
+    # plot_sequence_stats()
+    # table()
 
 def read_fasta(filename):
     data = list()
@@ -149,21 +153,26 @@ def ipro_table():
                 bp[key][1], bp[key][2], bp[key][3],
                 mf[key][1], mf[key][2], mf[key][3],
                 cc[key][1], cc[key][2], cc[key][3]))
-    res = sorted(res, key=lambda x: x[1], reverse=True)
+    res = sorted(res, key=lambda x: x[2], reverse=True)
     for item in res:
         print('%s & %s & %.2f & %.2f & %.2f & %.2f & %.2f & %.2f & %.2f & %.2f & %.2f \\\\' % item)
 
 
 def get_data(function):
     res = dict()
+    x = list()
+    y = list()
     with open(DATA_ROOT + function) as f:
         for line in f:
             if not line.startswith('GO:'):
                 continue
             it = line.strip().split(' ')
             res[it[0]] = (float(it[1]), float(it[5]))
-    # data = sorted(zip(functions, fscores, prec, rec), key=lambda x: -x[1])
+            x.append(float(it[1]))
+            y.append(int(it[4]))
+    # data = sorted(zip(functions, x, prec, rec), key=lambda x: -x[1])
     # return data[:20]
+    # return y, x
     return res
 
 
@@ -174,9 +183,9 @@ def plot(x, y):
         fmt='o')
     plt.xlabel('Number of positives')
     plt.ylabel('Fmax measure')
-    plt.title('Function centric performance - CC Ontology')
+    plt.title('Function centric performance - ' + FUNCTION.upper() + ' Ontology')
     plt.legend(loc="lower right")
-    plt.show()
+    plt.savefig(FUNCTION + '.eps')
 
 
 if __name__ == '__main__':

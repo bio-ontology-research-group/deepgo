@@ -14,6 +14,10 @@ The scripts require GeneOntology in OBO Format.
 * nn_hierarchical_network.py - This script is used to build and train the model which uses sequence and PPI network embeddings of protein as an input.
 * get_data.py, get_functions.py, mapping.py scripts are used to prepare raw data.
 * blast.py script is used to evaluate BLAST method's performance
+* evaluation.py script is used to evalutate the performance of the FFPred, GOFDR and our method.
+
+## Data
+* data.tar.gz - This archive contains data used to compare GOFDR, FFPred and our method.
 
 The online version of DeepGO is available at http://deepgo.bio2vec.net/
 

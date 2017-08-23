@@ -44,7 +44,7 @@ config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 K.set_session(sess)
 
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.ERROR)
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
 DATA_ROOT = 'data/swiss/'
@@ -110,25 +110,23 @@ def main(function, device, org, train):
     #             params['nb_filter'] = nb_filter
     #             f = model(params, is_train=train)
     #             print(dims, nb_filter, f)
-    # performanc_by_interpro()
+    performanc_by_interpro()
 
 
 def load_data(org=None):
 
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
-    n = len(df)
-    print(n)
-    
+
     test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
-    df = pd.concat([df, test_df], ignore_index=True)
+    # df = pd.concat([df, test_df], ignore_index=True)
     n = len(df)
     print(n)
     index = df.index.values
-    valid_n = int(n * 0.95)
+    valid_n = int(n * 0.8)
     train_df = df.loc[index[:valid_n]]
     valid_df = df.loc[index[valid_n:]]
 
-    test_df = valid_df
+    # test_df = valid_df
     if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == org]
@@ -352,7 +350,7 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    model_path = (DATA_ROOT + 'models/model_all_' + FUNCTION + '.h5')
+    model_path = (DATA_ROOT + 'models/model_' + FUNCTION + '.h5')
                   # '-' + str(params['embedding_dims']) +
                   # '-' + str(params['nb_filter']) + '.h5')
     checkpointer = ModelCheckpoint(
@@ -430,7 +428,7 @@ def load_prot_ipro():
             if len(it) != 3:
                 continue
             prot = it[1]
-            iprs = it[2].split(';')
+            iprs = set(it[2].split(';'))
             proteins.append(prot)
             ipros.append(iprs)
     return pd.DataFrame({'proteins': proteins, 'ipros': ipros})
@@ -454,7 +452,7 @@ def performanc_by_interpro():
         predictions = list()
         gos = list()
         for i, row in df.iterrows():
-            if not isinstance(row['ipros'], list):
+            if not isinstance(row['ipros'], set):
                 continue
             if ipro_id in row['ipros']:
                 labels.append(row['labels'])
@@ -489,7 +487,7 @@ def performanc_by_interpro():
             pr /= p_total
             if pr + rc > 0:
                 f = 2 * pr * rc / (pr + rc)
-                logging.info('%s\t%d\t%f\t%f\t%f' % (
+                print('%s\t%d\t%f\t%f\t%f' % (
                     ipro_id, len(labels), f, pr, rc))
 
 
