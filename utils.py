@@ -206,6 +206,37 @@ def f_score(labels, preds):
     return 2 * p * r / (p + r)
 
 
+def filter_specific(go, gos):
+    go_set = set()
+    for go_id in gos:
+        go_set.add(go_id)
+    for go_id in gos:
+        anchestors = get_anchestors(go, go_id)
+        anchestors.discard(go_id)
+        go_set -= anchestors
+    return list(go_set)
+
+
+def read_fasta(lines):
+    seqs = list()
+    info = list()
+    seq = ''
+    inf = ''
+    for line in lines:
+        line = line.strip()
+        if line.startswith('>'):
+            if seq != '':
+                seqs.append(seq)
+                info.append(inf)
+                seq = ''
+            inf = line[1:]
+        else:
+            seq += line
+    seqs.append(seq)
+    info.append(inf)
+    return info, seqs
+
+
 class MyCheckpoint(ModelCheckpoint):
     def on_epoch_end(self, epoch, logs={}):
         filepath = self.filepath.format(epoch=epoch, **logs)

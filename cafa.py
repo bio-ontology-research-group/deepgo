@@ -35,8 +35,8 @@ def read_fasta(filename):
             if line.startswith('>'):
                 if seq != '':
                     data.append(seq)
-                line = line[1:].split()[0].split('|')
-                line = line[1] + '\t' + line[2]
+                line = line[1:].split()[0]
+                # line = line[1] + '\t' + line[2]
                 seq = line + '\t'
             else:
                 seq += line
@@ -111,11 +111,11 @@ def fasta2tabs():
     data = list()
     # for dr in os.listdir(cafa_root):
     # if os.path.isdir(cafa_root + 'Targets/'):
-    for fl in os.listdir(cafa_root + 'Targets/'):
+    for fl in os.listdir('data/eshark/'):
         if fl.endswith('.fasta'):
-            seqs = read_fasta(cafa_root + 'Targets/' + fl)
+            seqs = read_fasta('data/eshark/' + fl)
             data += seqs
-    with open('data/cafa3/targets.txt', 'w') as f:
+    with open('data/eshark/targets.txt', 'w') as f:
         for line in data:
             f.write(line + '\n')
 
@@ -149,28 +149,41 @@ def cafa3():
                 fl.write('; ' + go_id)
             fl.write('\n')
 
+def get_blast_mapping():
+    mapping = {}
+    with open('data/eshark/eshark.out') as f:
+        for line in f:
+            # if not line.startswith('evm.model'):
+            #     continue
+            it = line.strip().split('\t')
+            mapping[it[0]] = it[1]
+    return mapping
 
 def get_data():
     proteins = list()
     targets = list()
     orgs = list()
     ngrams = list()
-    ngram_df = pd.read_pickle('data/cafa3/ngrams.pkl')
+    ngram_df = pd.read_pickle('data/eshark/ngrams.pkl')
     vocab = {}
+    mapping = get_blast_mapping()
     for key, gram in enumerate(ngram_df['ngrams']):
         vocab[gram] = key + 1
     gram_len = len(ngram_df['ngrams'][0])
     print('Gram length:', gram_len)
     print('Vocabulary size:', len(vocab))
 
-    with open('data/cafa3/targets.txt') as f:
+    with open('data/shark/targets.txt') as f:
         for line in f:
             it = line.strip().split('\t')
-            seq = it[3]
+            seq = it[1]
             if is_ok(seq):
-                orgs.append(it[0])
-                targets.append(it[1])
-                proteins.append(it[2])
+                # orgs.append(it[0])
+                targets.append(it[0])
+                if it[0] in mapping:
+                    proteins.append(mapping[it[0]])
+                else:
+                    proteins.append('')
                 grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
                 for i in xrange(len(seq) - gram_len + 1):
                     grams[i] = vocab[seq[i: (i + gram_len)]]
@@ -178,13 +191,13 @@ def get_data():
 
     df = pd.DataFrame({
         'targets': targets,
-        'proteins': proteins,
-        'ngrams': ngrams,
-        'orgs': orgs})
+        'accessions': proteins,
+        'ngrams': ngrams})
+    
     print(len(df))
-    embed_df = pd.read_pickle('data/graph_new_embeddings_proteins.pkl')
+    embed_df = pd.read_pickle('data/graph_new_embeddings.pkl')
 
-    df = pd.merge(df, embed_df, on='proteins', how='left')
+    df = pd.merge(df, embed_df, on='accessions', how='left')
 
     missing_rep = 0
     for i, row in df.iterrows():
@@ -193,7 +206,7 @@ def get_data():
             missing_rep += 1
     print(missing_rep)
 
-    df.to_pickle('data/swiss/targets.pkl')
+    df.to_pickle('data/shark/targets.pkl')
 
 
 def cafa2string():

@@ -67,7 +67,8 @@ ind = 0
     default=None,
     help='Organism id for filtering test set')
 @ck.option('--train', is_flag=True)
-def main(function, device, org, train):
+@ck.option('--param', default=0, help='Param index 0-7')
+def main(function, device, org, train, param):
     global FUNCTION
     FUNCTION = function
     global GO_ID
@@ -98,19 +99,33 @@ def main(function, device, org, train):
             'learning_rate': 0.001,
             'embedding_dims': 128,
             'embedding_dropout': 0.2,
+            'nb_conv': 3,
+            'nb_dense': 2,
             'filter_length': 128,
             'nb_filter': 32,
             'pool_length': 64,
             'stride': 32
         }
         model(params, is_train=train)
-    #     for dims in [64, 128, 256, 512]:
-    #         for nb_filter in [16, 32, 64, 128]:
-    #             params['embedding_dims'] = dims
-    #             params['nb_filter'] = nb_filter
-    #             f = model(params, is_train=train)
-    #             print(dims, nb_filter, f)
-    performanc_by_interpro()
+        dims = [64, 128, 256, 512]
+        nb_filters = [16, 32, 64, 128]
+        nb_convs = [1, 2, 3, 4]
+        nb_dense = [1, 2, 3, 4]
+        for i in xrange(param * 32, param * 32 + 32):
+            dim = i % 4
+            i = i / 4
+            nb_fil = i % 4
+            i /= 4
+            conv = i % 4
+            i /= 4
+            den = i 
+            params['embedding_dims'] = dims[dim]
+            params['nb_filter'] = nb_filters[nb_fil]
+            params['nb_conv'] = nb_convs[conv]
+            params['nb_dense'] = nb_dense[den]
+            # f = model(params, is_train=train)
+            # print(dims[dim], nb_filters[nb_fil], nb_convs[conv], nb_dense[den], f)
+    # performanc_by_interpro()
 
 
 def load_data(org=None):
@@ -174,15 +189,17 @@ def get_feature_model(params):
         embedding_dims,
         input_length=MAXLEN,
         dropout=params['embedding_dropout']))
-    model.add(Convolution1D(
-        nb_filter=params['nb_filter'],
-        filter_length=params['filter_length'],
-        border_mode='valid',
-        activation='relu',
-        subsample_length=1))
+    for i in xrange(params['nb_conv']):
+        model.add(Convolution1D(
+            nb_filter=params['nb_filter'],
+            filter_length=params['filter_length'],
+            border_mode='valid',
+            activation='relu',
+            subsample_length=1))
     model.add(MaxPooling1D(
         pool_length=params['pool_length'], stride=params['stride']))
     model.add(Flatten())
+    model.summary()
     return model
 
 
@@ -219,48 +236,6 @@ def get_function_node(name, inputs):
     output = Dense(1, name=output_name, activation='sigmoid')(inputs)
     return output, output
 
-
-def get_layers_recursive(inputs, node_output_dim=256):
-    layers = dict()
-    name = get_node_name(GO_ID)
-    inputs = Dense(
-        node_output_dim, activation='relu', name=name)(inputs)
-
-    def dfs(node_id, inputs):
-        name = get_node_name(node_id, unique=True)
-        net, output = get_function_node(name, inputs, node_output_dim)
-        childs = [
-            n_id for n_id in go[node_id]['children'] if n_id in func_set]
-        if node_id not in layers:
-            layers[node_id] = {'outputs': [output]}
-        else:
-            layers[node_id]['outputs'].append(output)
-        for ch_id in childs:
-            dfs(ch_id, net)
-
-    for node_id in go[GO_ID]['children']:
-        if node_id in func_set:
-            dfs(node_id, inputs)
-
-    for node_id in functions:
-        childs = get_go_set(go, node_id).intersection(func_set)
-        if len(childs) == 0:
-            if len(layers[node_id]['outputs']) == 1:
-                layers[node_id]['output'] = layers[node_id]['outputs'][0]
-            else:
-                name = get_node_name(node_id, unique=True)
-                output = merge(
-                    layers[node_id]['outputs'], mode='max', name=name)
-                layers[node_id]['output'] = output
-        else:
-            outputs = layers[node_id]['outputs']
-            for ch_id in childs:
-                outputs += layers[ch_id]['outputs']
-            name = get_node_name(node_id, unique=True)
-            output = merge(
-                outputs, mode='max', name=name)
-            layers[node_id]['output'] = output
-    return layers
 
 
 def get_layers(inputs):
@@ -311,10 +286,11 @@ def get_model(params):
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model(params)(inputs)
-    merged = merge(
+    net = merge(
         [feature_model, inputs2], mode='concat',
         concat_axis=1, name='merged')
-    net = Dense(params['fc_output'], activation='relu')(merged)
+    for i in xrange(params['nb_dense']):
+        net = Dense(params['fc_output'], activation='relu')(net)
     layers = get_layers(net)
     output_models = []
     for i in range(len(functions)):
@@ -350,9 +326,11 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    model_path = (DATA_ROOT + 'models/model_' + FUNCTION + '.h5')
+    model_path = (DATA_ROOT + 'models/model_seq_' + FUNCTION + '.h5') 
                   # '-' + str(params['embedding_dims']) +
-                  # '-' + str(params['nb_filter']) + '.h5')
+                  # '-' + str(params['nb_filter']) +
+                  # '-' + str(params['nb_conv']) +
+                  # '-' + str(params['nb_dense']) + '.h5')
     checkpointer = ModelCheckpoint(
         filepath=model_path,
         verbose=1, save_best_only=True)
@@ -377,10 +355,8 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
             nb_val_samples=len(val_data[0]),
             max_q_size=batch_size,
             callbacks=[checkpointer, earlystopper])
-
     logging.info('Loading best model')
     model = load_model(model_path)
-
     # orgs = ['9606', '10090', '10116', '7227', '7955',
     #         '559292', '3702', '284812', '6239',
     #         '83333', '83332', '224308', '208964']

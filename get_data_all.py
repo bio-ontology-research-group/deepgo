@@ -11,32 +11,33 @@ from utils import (
 from aaindex import is_ok
 import click as ck
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/all/'
 
 
 @ck.command()
 @ck.option(
-    '--function',
-    default='mf',
-    help='Function (mf, bp, cc)')
-@ck.option(
     '--split',
     default=0.8,
     help='Train test split')
-def main(function, split):
+def main(split):
     global SPLIT
     SPLIT = split
-    global GO_ID
-    GO_ID = FUNC_DICT[function]
+    global GO_IDS
+    GO_IDS = FUNC_DICT.values()
     global go
     go = get_gene_ontology('go.obo')
-    global FUNCTION
-    FUNCTION = function
-    func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
+    func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
     global functions
     functions = func_df['functions'].values
+    func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
+    functions = np.concatenate((functions, func_df['functions'].values))
+    func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
+    functions = np.concatenate((functions, func_df['functions'].values))
     global func_set
-    func_set = get_go_set(go, GO_ID)
+    func_set = (
+        get_go_set(go, GO_IDS[0])
+        | get_go_set(go, GO_IDS[1])
+        | get_go_set(go, GO_IDS[2]))
     print len(functions)
     global go_indexes
     go_indexes = dict()
@@ -78,9 +79,10 @@ def load_data():
         for go_id in go_list:
             if go_id in func_set:
                 go_set |= get_anchestors(go, go_id)
-        if not go_set or GO_ID not in go_set:
+        if not go_set:
             continue
-        go_set.remove(GO_ID)
+        for g_id in GO_IDS:
+            go_set.discard(g_id)
         gos.append(go_list)
         proteins.append(row['proteins'])
         accessions.append(row['accessions'])
@@ -128,19 +130,18 @@ def run(*args, **kwargs):
             row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
     print('Missing network reps:', missing_rep)
-    df = df[df['orgs'] == '9606']
-    # index = df.index.values
-    # np.random.seed(seed=0)
-    # np.random.shuffle(index)
-    # train_n = int(len(df) * SPLIT)
-    # train_df = df.loc[index[:train_n]]
-    # test_df = df.loc[index[train_n:]]
+    index = df.index.values
+    np.random.seed(seed=0)
+    np.random.shuffle(index)
+    train_n = int(len(df) * SPLIT)
+    train_df = df.loc[index[:train_n]]
+    test_df = df.loc[index[train_n:]]
     # prots_df = pd.read_pickle('data/swiss/clusters.pkl')
     # train_df = df[df['proteins'].isin(prots_df['proteins'])]
     # test_df = df[~df['proteins'].isin(prots_df['proteins'])]
-    # print(len(train_df), len(test_df))
-    # train_df.to_pickle(DATA_ROOT + 'train-' + FUNCTION + '.pkl')
-    # test_df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '.pkl')
+    print(len(train_df), len(test_df))
+    train_df.to_pickle(DATA_ROOT + 'train.pkl')
+    test_df.to_pickle(DATA_ROOT + 'test.pkl')
 
 
 if __name__ == '__main__':

@@ -18,7 +18,8 @@ from utils import (
     FUNC_DICT,
     MyCheckpoint,
     save_model_weights,
-    load_model_weights)
+    load_model_weights,
+    filter_specific)
 from keras.preprocessing import sequence
 from keras import backend as K
 import sys
@@ -51,7 +52,7 @@ ind = 0
     help='GPU or CPU device id')
 @ck.option(
     '--model-name',
-    default='model',
+    default='model_seq',
     help='Name of the model')
 def main(function, device, model_name):
     global FUNCTION
@@ -74,7 +75,8 @@ def main(function, device, model_name):
         go_indexes[go_id] = ind
     with tf.device('/' + device):
         model(model_name)
-
+    # add_gos()
+    # to_csv()
 
 def load_data():
     df = pd.read_pickle(DATA_ROOT + 'targets.pkl')
@@ -109,11 +111,14 @@ def model(model_name):
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Data size: %d" % len(data[0]))
     logging.info('Loading the model')
-    model = load_model(DATA_ROOT + model_name + '_' + FUNCTION + '.h5')
+    model = load_model(
+        DATA_ROOT + 'models/' + model_name + '_' + FUNCTION + '.h5')
 
-    logging.info('Predicting')
-    preds = model.predict_generator(
-        data_generator, val_samples=len(data[0]))
+    print(model.summary())
+    
+    # logging.info('Predicting')
+    # preds = model.predict_generator(
+    #    data_generator, val_samples=len(data[0]))
     
     # incon = 0
     # for i in xrange(len(data)):
@@ -126,16 +131,65 @@ def model(model_name):
     #                 preds[i, go_indexes[p_id]] = preds[i, j]
     # logging.info('Inconsistent predictions: %d' % incon)
 
-    predictions = list()
-    for i in xrange(len(targets)):
-        predictions.append(preds[i])
+    # predictions = list()
+    # for i in xrange(len(targets)):
+    #     predictions.append(preds[i])
+    # df = pd.DataFrame({
+    #     'targets': targets,
+    #     'predictions': predictions})
+    # print(len(df))
+    # df.to_pickle(DATA_ROOT + model_name + '_preds_' + FUNCTION + '.pkl')
+    # logging.info('Done in %d sec' % (time.time() - start_time))
+
+
+def add_gos():
+    df = pd.read_pickle(DATA_ROOT + 'model_preds_' + FUNCTION + '.pkl')
+    gos = list()
+    threshold = 0.1
+    for i, row in df.iterrows():
+        preds = row['predictions']
+        go_ids = list()
+        for i in xrange(len(preds)):
+            if preds[i] >= threshold:
+                go_ids.append(functions[i])
+        gos.append(filter_specific(go, go_ids))
+    df['gos_' + FUNCTION] = gos
+    print(df)
+    df.to_pickle(DATA_ROOT + 'predictions_' + FUNCTION + '.pkl')
+
+
+def to_csv():
+    bp_df = pd.read_pickle(DATA_ROOT + 'predictions_bp.pkl').drop(
+        'predictions', axis=1)
+    mf_df = pd.read_pickle(DATA_ROOT + 'predictions_mf.pkl').drop(
+        'predictions', axis=1)
+    cc_df = pd.read_pickle(DATA_ROOT + 'predictions_cc.pkl').drop(
+        'predictions', axis=1)
+    df = bp_df.merge(mf_df, on='targets').merge(cc_df, on='targets')
+    gos = list()
+    go_names = list()
+    for i, row in df.iterrows():
+        go_ids = list()
+        go_nms = list()
+        for go_id in row['gos_bp']:
+            go_ids.append('P:' + go_id)
+            go_nms.append('P:' + go[go_id]['name'])
+        for go_id in row['gos_mf']:
+            go_ids.append('F:' + go_id)
+            go_nms.append('F:' + go[go_id]['name'])
+        for go_id in row['gos_cc']:
+            go_ids.append('C:' + go_id)
+            go_nms.append('C:' + go[go_id]['name'])
+        gos.append(go_ids)
+        go_names.append(go_nms)
     df = pd.DataFrame({
-        'targets': targets,
-        'predictions': predictions})
-    print(len(df))
-    df.to_pickle(DATA_ROOT + model_name + '_preds_' + FUNCTION + '.pkl')
-    logging.info('Done in %d sec' % (time.time() - start_time))
-
-
+        'SeqName': df['targets'], 'GO_IDS': gos, 'GO_NAMES': go_names})
+    print(df)
+    df.to_csv(
+        DATA_ROOT + 'deepgo_20170829.tsv',
+        sep='\t', index=False, header=True,
+        columns=['SeqName', 'GO_IDS', 'GO_NAMES'])
+    
+    
 if __name__ == '__main__':
     main()
