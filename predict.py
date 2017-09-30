@@ -24,6 +24,7 @@ from keras.preprocessing import sequence
 from keras import backend as K
 import sys
 import time
+import datetime
 import logging
 import tensorflow as tf
 
@@ -35,7 +36,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/eshark/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -52,7 +53,7 @@ ind = 0
     help='GPU or CPU device id')
 @ck.option(
     '--model-name',
-    default='model_seq',
+    default='model',
     help='Name of the model')
 def main(function, device, model_name):
     global FUNCTION
@@ -73,10 +74,10 @@ def main(function, device, model_name):
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
         go_indexes[go_id] = ind
-    with tf.device('/' + device):
-        model(model_name)
+    # with tf.device('/' + device):
+    #     model(model_name)
     # add_gos()
-    # to_csv()
+    to_csv()
 
 def load_data():
     df = pd.read_pickle(DATA_ROOT + 'targets.pkl')
@@ -112,13 +113,12 @@ def model(model_name):
     logging.info("Data size: %d" % len(data[0]))
     logging.info('Loading the model')
     model = load_model(
-        DATA_ROOT + 'models/' + model_name + '_' + FUNCTION + '.h5')
+        DATA_ROOT + model_name + '_' + FUNCTION + '.h5')
 
-    print(model.summary())
     
-    # logging.info('Predicting')
-    # preds = model.predict_generator(
-    #    data_generator, val_samples=len(data[0]))
+    logging.info('Predicting')
+    preds = model.predict_generator(
+       data_generator, val_samples=len(data[0]))
     
     # incon = 0
     # for i in xrange(len(data)):
@@ -131,21 +131,21 @@ def model(model_name):
     #                 preds[i, go_indexes[p_id]] = preds[i, j]
     # logging.info('Inconsistent predictions: %d' % incon)
 
-    # predictions = list()
-    # for i in xrange(len(targets)):
-    #     predictions.append(preds[i])
-    # df = pd.DataFrame({
-    #     'targets': targets,
-    #     'predictions': predictions})
-    # print(len(df))
-    # df.to_pickle(DATA_ROOT + model_name + '_preds_' + FUNCTION + '.pkl')
-    # logging.info('Done in %d sec' % (time.time() - start_time))
+    predictions = list()
+    for i in xrange(len(targets)):
+        predictions.append(preds[i])
+    df = pd.DataFrame({
+        'targets': targets,
+        'predictions': predictions})
+    print(len(df))
+    df.to_pickle(DATA_ROOT + model_name + '_preds_' + FUNCTION + '.pkl')
+    logging.info('Done in %d sec' % (time.time() - start_time))
 
 
 def add_gos():
     df = pd.read_pickle(DATA_ROOT + 'model_preds_' + FUNCTION + '.pkl')
     gos = list()
-    threshold = 0.1
+    threshold = 0.2
     for i, row in df.iterrows():
         preds = row['predictions']
         go_ids = list()
@@ -185,8 +185,9 @@ def to_csv():
     df = pd.DataFrame({
         'SeqName': df['targets'], 'GO_IDS': gos, 'GO_NAMES': go_names})
     print(df)
+    dt = datetime.datetime.today().strftime('%Y%m%d')
     df.to_csv(
-        DATA_ROOT + 'deepgo_20170829.tsv',
+        DATA_ROOT + 'deepgo_%s.tsv' % (dt,),
         sep='\t', index=False, header=True,
         columns=['SeqName', 'GO_IDS', 'GO_NAMES'])
     

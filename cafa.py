@@ -155,7 +155,7 @@ def get_blast_mapping():
         for line in f:
             # if not line.startswith('evm.model'):
             #     continue
-            it = line.strip().split('\t')
+            it = line.strip().split()
             mapping[it[0]] = it[1]
     return mapping
 
@@ -173,7 +173,7 @@ def get_data():
     print('Gram length:', gram_len)
     print('Vocabulary size:', len(vocab))
 
-    with open('data/shark/targets.txt') as f:
+    with open('data/eshark/targets.txt') as f:
         for line in f:
             it = line.strip().split('\t')
             seq = it[1]
@@ -206,7 +206,7 @@ def get_data():
             missing_rep += 1
     print(missing_rep)
 
-    df.to_pickle('data/shark/targets.pkl')
+    df.to_pickle('data/eshark/targets.pkl')
 
 
 def cafa2string():

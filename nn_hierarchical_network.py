@@ -175,7 +175,7 @@ def load_data(org=None):
 
     train = get_values(train_df)
     valid = get_values(valid_df)
-    test = get_values(test_df)
+    test = get_values(train_df[:10000])
 
     return train, valid, test, train_df, valid_df, test_df
 
@@ -326,7 +326,7 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info("Validation data size: %d" % len(val_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    model_path = (DATA_ROOT + 'models/model_seq_' + FUNCTION + '.h5') 
+    model_path = (DATA_ROOT + 'models/model_' + FUNCTION + '.h5') 
                   # '-' + str(params['embedding_dims']) +
                   # '-' + str(params['nb_filter']) +
                   # '-' + str(params['nb_conv']) +
@@ -356,7 +356,9 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
             max_q_size=batch_size,
             callbacks=[checkpointer, earlystopper])
     logging.info('Loading best model')
+    start_time = time.time()
     model = load_model(model_path)
+    logging.info('Loading time: %d' % (time.time() - start_time))
     # orgs = ['9606', '10090', '10116', '7227', '7955',
     #         '559292', '3702', '284812', '6239',
     #         '83333', '83332', '224308', '208964']
@@ -367,8 +369,12 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     #     test_gos = test_df['gos'].values
     #     test_generator = DataGenerator(batch_size, nb_classes)
     #     test_generator.fit(test_data, test_labels)
+    start_time = time.time()
     preds = model.predict_generator(
         test_generator, val_samples=len(test_data[0]))
+    running_time = time.time() - start_time
+    logging.info('Running time: %d %d' % (running_time, len(test_data[0])))
+    return
     logging.info('Computing performance')
     f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
