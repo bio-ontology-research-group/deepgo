@@ -25,6 +25,6 @@ The online version of DeepGO is available at http://deepgo.bio2vec.net/
 
 ## Citation
 
-If you use DeepGO or our methods, please cite:
+If you use DeepGO for your research, or incorporate our learning algorithms in your work, please cite:
 
 Maxat Kulmanov, Mohammed Asif Khan, Robert Hoehndorf; DeepGO: Predicting protein functions from sequence and interactions using a deep ontology-aware classifier, Bioinformatics, 2017. https://doi.org/10.1093/bioinformatics/btx624
