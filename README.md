@@ -16,9 +16,15 @@ The scripts require GeneOntology in OBO Format.
 * blast.py script is used to evaluate BLAST method's performance
 * evaluation.py script is used to evalutate the performance of the FFPred, GOFDR and our method.
 
+## Running
+* Download all the files from http://deepgo.bio2vec.net/data/ and place them to data folder
+* Install ncbi-blast program on your system (blastp command should be available)
+* run predict_all.py script with -i <input_fasta_filename> arguments
+* See the results in results.tsv file
+
 ## Data
 * data.tar.gz - This archive contains data used to compare GOFDR, FFPred and our method.
-
+* http://deepgo.bio2vec.net/data/ - The files required to run predict_all.py script
 The online version of DeepGO is available at http://deepgo.bio2vec.net/
 
 [1]: https://doi.org/10.1093/bioinformatics/btx275
