@@ -14,6 +14,19 @@ funcs = ['cc', 'mf', 'bp']
 @ck.option('--in_file', '-i', help='Input FASTA file', required=True)
 @ck.option('--out_file', '-o', default='results.tsv', help='Output result file')
 def main(in_file, out_file):
+    
+    ngram_df = pd.read_pickle('data/models/ngrams.pkl')
+    global embed_df
+    embed_df = pd.read_pickle('data/graph_new_embeddings.pkl')
+    global vocab
+    vocab = {}
+    global gram_len
+    for key, gram in enumerate(ngram_df['ngrams']):
+        vocab[gram] = key + 1
+        gram_len = len(ngram_df['ngrams'][0])
+    print('Gram length:', gram_len)
+    print('Vocabulary size:', len(vocab))
+    
     ids, sequences = read_fasta(in_file)
     results = predict_functions(sequences)
     df = pd.DataFrame({'id': ids, 'predictions': results})
@@ -55,11 +68,16 @@ def get_data(sequences):
     prot_ids = {}
     if p.wait() == 0:
         for line in p.stdout:
+            print(line)
             it = line.strip().split('\t')
-            prot_ids[it[1]] = int(it[0])
-    prots = embed_df[embed_df['accessions'].isin(prot_ids.keys())]
+            prot_ids[int(it[0])] = it[1]
+    prots = embed_df[embed_df['accessions'].isin(set(prot_ids.values()))]
+    embeds_dict = {}
     for i, row in prots.iterrows():
-        embeds[prot_ids[row['accessions']], :] = row['embeddings']
+        embeds_dict[row['accessions']] = row['embeddings']
+
+    for i, prot_id in prot_ids.iteritems():
+        embeds[i, :] = embeds_dict[prot_id]
         
     for i in xrange(len(sequences)):
         seq = sequences[i]
@@ -86,17 +104,6 @@ def predict(data, model, functions, threshold, batch_size=1):
 def init_models(conf=None, **kwargs):
     print('Init')
     global models
-    ngram_df = pd.read_pickle('data/models/ngrams.pkl')
-    global embed_df
-    embed_df = pd.read_pickle('data/graph_new_embeddings.pkl')
-    global vocab
-    vocab = {}
-    global gram_len
-    for key, gram in enumerate(ngram_df['ngrams']):
-        vocab[gram] = key + 1
-        gram_len = len(ngram_df['ngrams'][0])
-    print('Gram length:', gram_len)
-    print('Vocabulary size:', len(vocab))
     threshold = 0.3
     # sequences = ['MKKVLVINGPNLNLLGIREKNIYGSVSYEDVLKSISRKAQELGFEVEFFQSNHEGEIIDKIHRAYFEKVDAIIINPGAYTHYSYAIHDAIKAVNIPTIEVHISNIHAREEFRHKSVIAPACTGQISGFGIKSYIIALYALKEILD']
     # data = get_data(sequences)
