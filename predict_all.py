@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import click as ck
 import numpy as np
 import pandas as pd
@@ -9,32 +11,33 @@ funcs = ['cc', 'mf', 'bp']
 
 
 @ck.command()
-@ck.option('--input', '-i', help='Input FASTA file')
-@ck.option('--output', '-o', help='Output result file')
+@ck.option('--in_file', '-i', help='Input FASTA file', required=True)
+@ck.option('--out_file', '-o', default='results.tsv', help='Output result file')
 def main(in_file, out_file):
     ids, sequences = read_fasta(in_file)
-    results = predict_functions(data)
+    results = predict_functions(sequences)
     df = pd.DataFrame({'id': ids, 'predictions': results})
     df.to_csv(out_file, sep='\t')
 
 
-def read_fasta(lines):
+def read_fasta(filename):
     seqs = list()
     info = list()
     seq = ''
     inf = ''
-    for line in lines:
-        line = line.strip()
-        if line.startswith('>'):
-            if seq != '':
-                seqs.append(seq)
-                info.append(inf)
-                seq = ''
-            inf = line[1:].split()[0]
-        else:
-            seq += line
-    seqs.append(seq)
-    info.append(inf)
+    with open(filename) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('>'):
+                if seq != '':
+                    seqs.append(seq)
+                    info.append(inf)
+                    seq = ''
+                inf = line[1:].split()[0]
+            else:
+                seq += line
+        seqs.append(seq)
+        info.append(inf)
     return info, seqs
 
 def get_data(sequences):
@@ -122,3 +125,7 @@ def predict_functions(sequences, threshold=0.3):
         for j in xrange(n):
             result[j] += res[j]
     return result
+
+
+if __name__ == '__main__':
+    main()
