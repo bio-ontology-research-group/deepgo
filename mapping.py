@@ -71,7 +71,9 @@ def to_pickle_org(org='human'):
     })
     print(len(df))
     df.to_pickle(DATA_ROOT + org + '-sequences.pkl')
-
+    # Filter reviewed
+    df = df[df['status'] == 'reviewed']
+    print(len(df))
     print('Loading embeddings')
     rep_df = pd.read_pickle('data/graph_new_embeddings.pkl')
     embeds = {}
@@ -82,9 +84,13 @@ def to_pickle_org(org='human'):
     p = Popen(['blastp', '-db', 'data/embeddings.fa',
                '-max_target_seqs', '1', '-num_threads', '128',
                '-outfmt', '6 qseqid sseqid'], stdin=PIPE, stdout=PIPE)
+    missing_rep = 0
     for i, row in df.iterrows():
         if not isinstance(row['embeddings'], np.ndarray):
             p.stdin.write('>' + row['accessions'] + '\n' + row['sequences'] + '\n')
+            missing_rep += 1
+    print('Starting blastp for %d' % missing_rep)
+    
     p.stdin.close()
     embed_map = {}
     if p.wait():
