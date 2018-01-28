@@ -10,10 +10,11 @@ import click as ck
 from keras.models import Sequential, Model, load_model
 from keras.layers import (
     Dense, Dropout, Activation, Input,
-    Flatten, Highway, merge, BatchNormalization)
+    Flatten, Highway, BatchNormalization)
+from keras.layers.merge import concatenate, maximum
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
-    Convolution1D, MaxPooling1D)
+    Conv1D, MaxPooling1D)
 from keras.optimizers import Adam, RMSprop, Adadelta
 from sklearn.metrics import classification_report
 from utils import (
@@ -38,6 +39,7 @@ import tensorflow as tf
 from sklearn.metrics import roc_curve, auc, matthews_corrcoef
 from scipy.spatial import distance
 from multiprocessing import Pool
+import math
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -47,7 +49,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/phenogo/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -93,38 +95,38 @@ def main(function, device, org, train, param):
         go_indexes[go_id] = ind
     global node_names
     node_names = set()
-    with tf.device('/' + device):
-        params = {
-            'fc_output': 1024,
-            'learning_rate': 0.001,
-            'embedding_dims': 128,
-            'embedding_dropout': 0.2,
-            'nb_conv': 3,
-            'nb_dense': 2,
-            'filter_length': 128,
-            'nb_filter': 32,
-            'pool_length': 64,
-            'stride': 32
-        }
-        model(params, is_train=train)
-        dims = [64, 128, 256, 512]
-        nb_filters = [16, 32, 64, 128]
-        nb_convs = [1, 2, 3, 4]
-        nb_dense = [1, 2, 3, 4]
-        for i in xrange(param * 32, param * 32 + 32):
-            dim = i % 4
-            i = i / 4
-            nb_fil = i % 4
-            i /= 4
-            conv = i % 4
-            i /= 4
-            den = i 
-            params['embedding_dims'] = dims[dim]
-            params['nb_filter'] = nb_filters[nb_fil]
-            params['nb_conv'] = nb_convs[conv]
-            params['nb_dense'] = nb_dense[den]
-            # f = model(params, is_train=train)
-            # print(dims[dim], nb_filters[nb_fil], nb_convs[conv], nb_dense[den], f)
+    # with tf.device('/' + device):
+    params = {
+        'fc_output': 1024,
+        'learning_rate': 0.001,
+        'embedding_dims': 128,
+        'embedding_dropout': 0.2,
+        'nb_conv': 1,
+        'nb_dense': 2,
+        'filter_length': 128,
+        'nb_filter': 32,
+        'pool_length': 64,
+        'stride': 32
+    }
+    model(params, is_train=train)
+    dims = [64, 128, 256, 512]
+    nb_filters = [16, 32, 64, 128]
+    nb_convs = [1, 2, 3, 4]
+    nb_dense = [1, 2, 3, 4]
+    for i in xrange(param * 32, param * 32 + 32):
+        dim = i % 4
+        i = i / 4
+        nb_fil = i % 4
+        i /= 4
+        conv = i % 4
+        i /= 4
+        den = i 
+        params['embedding_dims'] = dims[dim]
+        params['nb_filter'] = nb_filters[nb_fil]
+        params['nb_conv'] = nb_convs[conv]
+        params['nb_dense'] = nb_dense[den]
+        # f = model(params, is_train=train)
+        # print(dims[dim], nb_filters[nb_fil], nb_convs[conv], nb_dense[den], f)
     # performanc_by_interpro()
 
 
@@ -132,7 +134,7 @@ def load_data(org=None):
 
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
 
-    test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'mouse' + '-' + FUNCTION + '.pkl')
     # df = pd.concat([df, test_df], ignore_index=True)
     n = len(df)
     print(n)
@@ -175,60 +177,33 @@ def load_data(org=None):
 
     train = get_values(train_df)
     valid = get_values(valid_df)
-    test = get_values(train_df[:10000])
+    test = get_values(test_df)
 
     return train, valid, test, train_df, valid_df, test_df
 
 
 def get_feature_model(params):
-    embedding_dims = params['embedding_dims']
+    embedding_dims = 128
     max_features = 8001
     model = Sequential()
     model.add(Embedding(
         max_features,
         embedding_dims,
-        input_length=MAXLEN,
-        dropout=params['embedding_dropout']))
-    for i in xrange(params['nb_conv']):
-        model.add(Convolution1D(
-            nb_filter=params['nb_filter'],
-            filter_length=params['filter_length'],
-            border_mode='valid',
-            activation='relu',
-            subsample_length=1))
-    model.add(MaxPooling1D(
-        pool_length=params['pool_length'], stride=params['stride']))
+        input_length=MAXLEN))
+    model.add(Conv1D(
+        filters=128,
+        kernel_size=16,
+        padding='valid',
+        activation='relu',
+        strides=1))
+    model.add(MaxPooling1D(pool_size=16, strides=8))
     model.add(Flatten())
-    model.summary()
     return model
 
 
-def merge_outputs(outputs, name):
-    if len(outputs) == 1:
-        return outputs[0]
-    return merge(outputs, mode='concat', name=name, concat_axis=1)
-
-
-def merge_nets(nets, name):
-    if len(nets) == 1:
-        return nets[0]
-    return merge(nets, mode='sum', name=name)
-
-
-def get_node_name(go_id, unique=False):
-    name = go_id.split(':')[1]
-    if not unique:
-        return name
-    if name not in node_names:
-        node_names.add(name)
-        return name
-    i = 1
-    while (name + '_' + str(i)) in node_names:
-        i += 1
-    name = name + '_' + str(i)
-    node_names.add(name)
-    return name
-
+def get_node_name(node_id):
+    node_id = node_id.replace('GO:', '')
+    return node_id
 
 def get_function_node(name, inputs):
     output_name = name + '_out'
@@ -249,13 +224,6 @@ def get_layers(inputs):
     while len(q) > 0:
         node_id, net = q.popleft()
         parent_nets = [inputs]
-        # for p_id in get_parents(go, node_id):
-        #     if p_id in func_set:
-        #         parent_nets.append(layers[p_id]['net'])
-        # if len(parent_nets) > 1:
-        #     name = get_node_name(node_id) + '_parents'
-        #     net = merge(
-        #         parent_nets, mode='concat', concat_axis=1, name=name)
         name = get_node_name(node_id)
         net, output = get_function_node(name, inputs)
         if node_id not in layers:
@@ -276,8 +244,8 @@ def get_layers(inputs):
             for ch_id in childs:
                 outputs.append(layers[ch_id]['output'])
             name = get_node_name(node_id) + '_max'
-            layers[node_id]['output'] = merge(
-                outputs, mode='max', name=name)
+            layers[node_id]['output'] = maximum(
+                outputs, name=name)
     return layers
 
 
@@ -286,19 +254,18 @@ def get_model(params):
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model(params)(inputs)
-    net = merge(
-        [feature_model, inputs2], mode='concat',
-        concat_axis=1, name='merged')
+    net = concatenate(
+        [feature_model, inputs2], axis=1, name='merged')
     for i in xrange(params['nb_dense']):
         net = Dense(params['fc_output'], activation='relu')(net)
     layers = get_layers(net)
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
-    net = merge(output_models, mode='concat', concat_axis=1)
+    net = concatenate(output_models, axis=1)
     # net = Dense(1024, activation='relu')(merged)
     # net = Dense(len(functions), activation='sigmoid')(net)
-    model = Model(input=[inputs, inputs2], output=net)
+    model = Model(inputs=[inputs, inputs2], outputs=net)
     logging.info('Compiling the model')
     optimizer = RMSprop(lr=params['learning_rate'])
 
@@ -310,7 +277,7 @@ def get_model(params):
     return model
 
 
-def model(params, batch_size=128, nb_epoch=6, is_train=True):
+def model(params, batch_size=128, epochs=6, is_train=True):
     # set parameters:
     nb_classes = len(functions)
     start_time = time.time()
@@ -319,14 +286,14 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     train_df = pd.concat([train_df, valid_df])
     test_gos = test_df['gos'].values
     train_data, train_labels = train
-    val_data, val_labels = val
+    valid_data, valid_labels = val
     test_data, test_labels = test
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Training data size: %d" % len(train_data[0]))
-    logging.info("Validation data size: %d" % len(val_data[0]))
+    logging.info("Validation data size: %d" % len(valid_data[0]))
     logging.info("Test data size: %d" % len(test_data[0]))
 
-    model_path = (DATA_ROOT + 'models/model_' + FUNCTION + '.h5') 
+    model_path = (DATA_ROOT + 'model_' + FUNCTION + '.h5') 
                   # '-' + str(params['embedding_dims']) +
                   # '-' + str(params['nb_filter']) +
                   # '-' + str(params['nb_conv']) +
@@ -336,26 +303,29 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
         verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
 
-    logging.info('Starting training the model')
-
     train_generator = DataGenerator(batch_size, nb_classes)
     train_generator.fit(train_data, train_labels)
     valid_generator = DataGenerator(batch_size, nb_classes)
-    valid_generator.fit(val_data, val_labels)
+    valid_generator.fit(valid_data, valid_labels)
     test_generator = DataGenerator(batch_size, nb_classes)
     test_generator.fit(test_data, test_labels)
 
     if is_train:
+        logging.info('Starting training the model')
+        valid_steps = int(math.ceil(valid_data[0].shape[0] / batch_size))
+        train_steps = int(math.ceil(train_data[0].shape[0] / batch_size))
         model = get_model(params)
         model.fit_generator(
             train_generator,
-            samples_per_epoch=len(train_data[0]),
-            nb_epoch=nb_epoch,
+            steps_per_epoch=train_steps,
+            epochs=epochs,
             validation_data=valid_generator,
-            nb_val_samples=len(val_data[0]),
-            max_q_size=batch_size,
+            validation_steps=valid_steps,
+            max_queue_size=batch_size,
+            workers=12,
             callbacks=[checkpointer, earlystopper])
-    logging.info('Loading best model')
+        logging.info('Loading best model')
+    
     start_time = time.time()
     model = load_model(model_path)
     logging.info('Loading time: %d' % (time.time() - start_time))
@@ -370,11 +340,12 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     #     test_generator = DataGenerator(batch_size, nb_classes)
     #     test_generator.fit(test_data, test_labels)
     start_time = time.time()
+    test_steps = int(math.ceil(test_data[0].shape[0] / batch_size)) + 1
     preds = model.predict_generator(
-        test_generator, val_samples=len(test_data[0]))
+        test_generator, steps=test_steps, verbose=1)
+
     running_time = time.time() - start_time
     logging.info('Running time: %d %d' % (running_time, len(test_data[0])))
-    return
     logging.info('Computing performance')
     f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
@@ -382,20 +353,20 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('MCC: \t %f ' % (mcc, ))
-    print('%.3f & %.3f & %.3f & %.3f & %.3f' % (
+    logging.info('%.3f & %.3f & %.3f & %.3f & %.3f' % (
         f, p, r, roc_auc, mcc))
     # return f
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
-    proteins = test_df['proteins']
+    proteins = test_df['accessions']
     predictions = list()
-    for i in xrange(preds_max.shape[0]):
-        predictions.append(preds_max[i])
+    for i in xrange(preds.shape[0]):
+        predictions.append(preds[i])
     df = pd.DataFrame(
         {
             'proteins': proteins, 'predictions': predictions,
-            'gos': test_df['gos'], 'labels': test_df['labels']})
-    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
+            'gos': test_df['gos'].values, 'labels': test_df['labels'].values})
+    df.to_pickle(DATA_ROOT + 'mouse-' + FUNCTION + '-preds.pkl')
     # logging.info('Done in %d sec' % (time.time() - start_time))
 
     # function_centric_performance(functions, preds.T, test_labels.T)
@@ -520,6 +491,7 @@ def compute_mcc(preds, labels):
 
 def compute_performance(preds, labels, gos):
     preds = np.round(preds, 2)
+    print(preds.shape, labels.shape, gos.shape)
     f_max = 0
     p_max = 0
     r_max = 0
@@ -536,13 +508,13 @@ def compute_performance(preds, labels, gos):
             tp = np.sum(predictions[i, :] * labels[i, :])
             fp = np.sum(predictions[i, :]) - tp
             fn = np.sum(labels[i, :]) - tp
-            all_gos = set()
-            for go_id in gos[i]:
-                if go_id in all_functions:
-                    all_gos |= get_anchestors(go, go_id)
-            all_gos.discard(GO_ID)
-            all_gos -= func_set
-            fn += len(all_gos)
+            # all_gos = set()
+            # for go_id in gos[i]:
+            #     if go_id in all_functions:
+            #         all_gos |= get_anchestors(go, go_id)
+            # all_gos.discard(GO_ID)
+            # all_gos -= func_set
+            # fn += len(all_gos)
             if tp == 0 and fp == 0 and fn == 0:
                 continue
             total += 1

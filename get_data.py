@@ -11,7 +11,7 @@ from utils import (
 from aaindex import is_ok
 import click as ck
 
-DATA_ROOT = 'data/swiss/'
+DATA_ROOT = 'data/phenogo/'
 
 
 @ck.command()
@@ -59,7 +59,8 @@ def load_data():
     ngrams = list()
     sequences = list()
     accessions = list()
-    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
+    status = list()
+    df = pd.read_pickle(DATA_ROOT + 'mouse-sequences.pkl')
     # Filtering data by sequences
     index = list()
     for i, row in df.iterrows():
@@ -71,16 +72,16 @@ def load_data():
         go_list = []
         for item in row['annots']:
             items = item.split('|')
-            if items[1] in EXP_CODES:
-                go_list.append(items[0])
-            # go_list.append(items[0])
+            # if items[1] in EXP_CODES:
+            #     go_list.append(items[0])
+            go_list.append(items[0])
         go_set = set()
         for go_id in go_list:
             if go_id in func_set:
                 go_set |= get_anchestors(go, go_id)
-        if not go_set or GO_ID not in go_set:
-            continue
-        go_set.remove(GO_ID)
+        # if not go_set or GO_ID not in go_set:
+        #     continue
+        go_set.discard(GO_ID)
         gos.append(go_list)
         proteins.append(row['proteins'])
         accessions.append(row['accessions'])
@@ -118,9 +119,9 @@ def load_org_df():
 
 def run(*args, **kwargs):
     df = load_data()
-    org_df = load_org_df()
+    # org_df = load_org_df()
     rep_df = load_rep_df()
-    df = pd.merge(df, org_df, on='proteins', how='left')
+    # df = pd.merge(df, org_df, on='proteins', how='left')
     df = pd.merge(df, rep_df, on='accessions', how='left')
     missing_rep = 0
     for i, row in df.iterrows():
@@ -128,7 +129,10 @@ def run(*args, **kwargs):
             row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
     print('Missing network reps:', missing_rep)
-    df = df[df['orgs'] == '9606']
+    df = df[df['orgs'] == '10090']
+    print(len(df))
+    df.to_pickle(DATA_ROOT + 'mouse-' + FUNCTION + '.pkl')
+    return
     # index = df.index.values
     # np.random.seed(seed=0)
     # np.random.shuffle(index)

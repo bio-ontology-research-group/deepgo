@@ -8,9 +8,103 @@ import os
 import requests
 from aaindex import is_ok
 import gzip
+from subprocess import Popen, PIPE
 
+DATA_ROOT = 'data/phenogo/'
 
-DATA_ROOT = 'data/swissexp/'
+def to_pickle_org(org='human'):
+    proteins = list()
+    accessions = list()
+    sequences = list()
+    length = list()
+    status = list()
+    ngrams = list()
+    
+    ngram_df = pd.read_pickle(DATA_ROOT + 'ngrams.pkl')
+    vocab = {}
+    for key, gram in enumerate(ngram_df['ngrams']):
+        vocab[gram] = key + 1
+    gram_len = len(ngram_df['ngrams'][0])
+    print('Gram length:', gram_len)
+    print('Vocabulary size:', len(vocab))
+
+    with gzip.open(DATA_ROOT + 'uniprot-' + org + '.tab.gz') as f:
+        next(f)
+        for line in f:
+            items = line.strip().split('\t')
+            seq = items[2]
+            if not is_ok(seq):
+                continue
+            proteins.append(items[1])
+            accessions.append(items[0])
+            sequences.append(seq)
+            length.append(int(items[3]))
+            status.append(items[4])
+            grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
+            for i in xrange(len(seq) - gram_len + 1):
+                grams[i] = vocab[seq[i: (i + gram_len)]]
+            ngrams.append(grams)
+
+    # with open('data/cafa3/tremble_data.tab') as f:
+    #     for line in f:
+    #         items = line.strip().split('\t')
+    #         if items[0] not in prots:
+    #             prots.add(items[0])
+    #             proteins.append(items[0])
+    #             accessions.append(items[1])
+    #             sequences.append(items[2])
+
+    # with open('data/cafa3/uniprot_trembl.tab') as f:
+    #     for line in f:
+    #         items = line.strip().split('\t')
+    #         if items[1] not in prots:
+    #             proteins.append(items[1])
+    #             accessions.append(items[0])
+    #             sequences.append(items[2])
+    df = pd.DataFrame({
+        'proteins': proteins,
+        'accessions': accessions,
+        'sequences': sequences,
+        'length': length,
+        'status': status,
+        'ngrams': ngrams
+    })
+    print(len(df))
+    df.to_pickle(DATA_ROOT + org + '-sequences.pkl')
+
+    print('Loading embeddings')
+    rep_df = pd.read_pickle('data/graph_new_embeddings.pkl')
+    embeds = {}
+    for i, row in rep_df.iterrows():
+        embeds[row['accessions']] = row['embeddings']
+    df = pd.merge(df, rep_df, on='accessions', how='left')
+
+    p = Popen(['blastp', '-db', 'data/embeddings.fa',
+               '-max_target_seqs', '1', '-num_threads', '128',
+               '-outfmt', '6 qseqid sseqid'], stdin=PIPE, stdout=PIPE)
+    for i, row in df.iterrows():
+        if not isinstance(row['embeddings'], np.ndarray):
+            p.stdin.write('>' + row['accessions'] + '\n' + row['sequences'] + '\n')
+    p.stdin.close()
+    embed_map = {}
+    if p.wait():
+        for line in p.stdout:
+            print(line)
+            it = line.strip().split('\t')
+            embed_map[it[0]] = it[1]
+    missing_rep = 0
+    for i, row in df.iterrows():
+        if not isinstance(row['embeddings'], np.ndarray):
+            if row['accessions'] in embed_map:
+                row['embeddings'] = embeds[embed_map[row['accessions']]]
+            else:
+                row['embeddings'] = np.zeros((256,), dtype=np.float32)
+                missing_rep += 1
+    print('Missing reps: ', missing_rep)
+
+    df.to_pickle(DATA_ROOT + org + '-data.pkl')
+    
+
 def to_pickle():
     prots = set()
     proteins = list()
@@ -396,10 +490,10 @@ def merge_trembl():
 
 
 def main():
-    string_uni()
+    # string_uni()
     # human_go_annotations()
     # predictions('9606')
-    # to_pickle()
+    to_pickle_org()
     # filter_exp()
     # goa_pickle()
     # download_prots()
