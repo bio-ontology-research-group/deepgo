@@ -93,7 +93,7 @@ def to_pickle_org(org='human'):
     
     p.stdin.close()
     embed_map = {}
-    if p.wait():
+    if p.wait() == 0:
         for line in p.stdout:
             print(line)
             it = line.strip().split('\t')
