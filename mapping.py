@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE
 
 DATA_ROOT = 'data/phenogo/'
 
-def to_pickle_org(org='human'):
+def to_pickle_org(org='mouse'):
     proteins = list()
     accessions = list()
     sequences = list()
@@ -102,9 +102,9 @@ def to_pickle_org(org='human'):
     for i, row in df.iterrows():
         if not isinstance(row['embeddings'], np.ndarray):
             if row['accessions'] in embed_map:
-                row['embeddings'] = embeds[embed_map[row['accessions']]]
+                df.at[i, 'embeddings'] = embeds[embed_map[row['accessions']]]
             else:
-                row['embeddings'] = np.zeros((256,), dtype=np.float32)
+                df.at[i, 'embeddings'] = np.zeros((256,), dtype=np.float32)
                 missing_rep += 1
     print('Missing reps: ', missing_rep)
 
