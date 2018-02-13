@@ -133,7 +133,6 @@ def main(function, device, org, is_train, param):
     #     print(dims[dim], nb_filters[nb_fil], nb_convs[conv], nb_dense[den], f)
     # performanc_by_interpro()
 
-    test(test_data)
 
 
 def load_data(org=None):
@@ -173,7 +172,7 @@ def load_data(org=None):
         return values - mn
 
     def get_values(data_frame):
-        # labels = reshape(data_frame['labels'].values)
+        labels = reshape(data_frame['labels'].values)
         c = 0
         for i, row in data_frame.iterrows():
             if not isinstance(row['embeddings'], np.ndarray):
@@ -185,7 +184,6 @@ def load_data(org=None):
         ngrams = reshape(ngrams)
         rep = reshape(data_frame['embeddings'].values)
         data = (ngrams, rep)
-        labels = np.zeros((ngrams.shape[0], len(functions)), dtype=np.int32)
         return data, labels
 
     train = get_values(train_df)
