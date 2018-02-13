@@ -68,9 +68,9 @@ ind = 0
     '--org',
     default=None,
     help='Organism id for filtering test set')
-@ck.option('--train', is_flag=True)
+@ck.option('--is-train', is_flag=True)
 @ck.option('--param', default=0, help='Param index 0-7')
-def main(function, device, org, train, param):
+def main(function, device, org, is_train, param):
     global FUNCTION
     FUNCTION = function
     global GO_ID
@@ -95,7 +95,11 @@ def main(function, device, org, train, param):
         go_indexes[go_id] = ind
     global node_names
     node_names = set()
-    # with tf.device('/' + device):
+    
+    train_data, valid_data, test_data, train_df, valid_df, test_df = load_data()
+    train_valid_data = train_data, valid_data
+    test_data = test_data, test_df
+    
     params = {
         'fc_output': 1024,
         'learning_rate': 0.001,
@@ -108,33 +112,38 @@ def main(function, device, org, train, param):
         'pool_length': 64,
         'stride': 32
     }
-    model(params, is_train=train)
-    dims = [64, 128, 256, 512]
-    nb_filters = [16, 32, 64, 128]
-    nb_convs = [1, 2, 3, 4]
-    nb_dense = [1, 2, 3, 4]
-    for i in xrange(param * 32, param * 32 + 32):
-        dim = i % 4
-        i = i / 4
-        nb_fil = i % 4
-        i /= 4
-        conv = i % 4
-        i /= 4
-        den = i 
-        params['embedding_dims'] = dims[dim]
-        params['nb_filter'] = nb_filters[nb_fil]
-        params['nb_conv'] = nb_convs[conv]
-        params['nb_dense'] = nb_dense[den]
-        # f = model(params, is_train=train)
-        # print(dims[dim], nb_filters[nb_fil], nb_convs[conv], nb_dense[den], f)
+    model_file = DATA_ROOT + 'model_' + FUNCTION + '.h5'
+    if is_train:
+        train(train_valid_data, params, model_file)
+    test(test_data, model_file)
+    # dims = [64, 128, 256, 512]
+    # nb_filters = [16, 32, 64, 128]
+    # nb_convs = [1, 2, 3, 4]
+    # nb_dense = [1, 2, 3, 4]
+    # for i in xrange(param * 32, param * 32 + 32):
+    #     dim = i % 4
+    #     i = i / 4
+    #     nb_fil = i % 4
+    #     i /= 4
+    #     conv = i % 4
+    #     i /= 4
+    #     den = i 
+    #     params['embedding_dims'] = dims[dim]
+    #     params['nb_filter'] = nb_filters[nb_fil]
+    #     params['nb_conv'] = nb_convs[conv]
+    #     params['nb_dense'] = nb_dense[den]
+    #     f = model(params, is_train=train)
+    #     print(dims[dim], nb_filters[nb_fil], nb_convs[conv], nb_dense[den], f)
     # performanc_by_interpro()
+
+    test(test_data)
 
 
 def load_data(org=None):
 
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
 
-    test_df = pd.read_pickle(DATA_ROOT + 'human' + '-' + 'data' + '.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
     # df = pd.concat([df, test_df], ignore_index=True)
     n = len(df)
     print(n)
@@ -255,14 +264,14 @@ def get_layers(inputs):
     return layers
 
 
-def get_model(params):
+def build_model(params):
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
     feature_model = get_feature_model(params)(inputs)
     net = concatenate(
         [feature_model, inputs2], axis=1, name='merged')
-    for i in xrange(params['nb_dense']):
+    for i in range(params['nb_dense']):
         net = Dense(params['fc_output'])(net)
     layers = get_layers(net)
     output_models = []
@@ -283,29 +292,19 @@ def get_model(params):
     return model
 
 
-def model(params, batch_size=128, epochs=6, is_train=True):
+def train(data, params, model_file, batch_size=128, epochs=6):
     # set parameters:
     nb_classes = len(functions)
     start_time = time.time()
-    logging.info("Loading Data")
-    train, val, test, train_df, valid_df, test_df = load_data()
-    train_df = pd.concat([train_df, valid_df])
-    # test_gos = test_df['gos'].values
-    train_data, train_labels = train
-    valid_data, valid_labels = val
-    test_data, test_labels = test
+    train_data, valid_data = data
+    train_data, train_labels = train_data
+    valid_data, valid_labels = valid_data
     logging.info("Data loaded in %d sec" % (time.time() - start_time))
     logging.info("Training data size: %d" % len(train_data[0]))
     logging.info("Validation data size: %d" % len(valid_data[0]))
-    logging.info("Test data size: %d" % len(test_data[0]))
-
-    model_path = (DATA_ROOT + 'model_' + FUNCTION + '.h5') 
-                  # '-' + str(params['embedding_dims']) +
-                  # '-' + str(params['nb_filter']) +
-                  # '-' + str(params['nb_conv']) +
-                  # '-' + str(params['nb_dense']) + '.h5')
+    
     checkpointer = ModelCheckpoint(
-        filepath=model_path,
+        filepath=model_file,
         verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
 
@@ -313,27 +312,30 @@ def model(params, batch_size=128, epochs=6, is_train=True):
     train_generator.fit(train_data, train_labels)
     valid_generator = DataGenerator(batch_size, nb_classes)
     valid_generator.fit(valid_data, valid_labels)
-    test_generator = DataGenerator(batch_size, nb_classes)
-    test_generator.fit(test_data, test_labels)
-
-    if is_train:
-        logging.info('Starting training the model')
-        valid_steps = int(math.ceil(valid_data[0].shape[0] / batch_size))
-        train_steps = int(math.ceil(train_data[0].shape[0] / batch_size))
-        model = get_model(params)
-        model.fit_generator(
-            train_generator,
-            steps_per_epoch=train_steps,
-            epochs=epochs,
-            validation_data=valid_generator,
-            validation_steps=valid_steps,
-            max_queue_size=batch_size,
-            workers=12,
-            callbacks=[checkpointer, earlystopper])
-        logging.info('Loading best model')
     
+    logging.info('Starting training the model')
+    valid_steps = int(math.ceil(valid_data[0].shape[0] / batch_size))
+    train_steps = int(math.ceil(train_data[0].shape[0] / batch_size))
+    model = build_model(params)
+    model.fit_generator(
+        train_generator,
+        steps_per_epoch=train_steps,
+        epochs=epochs,
+        validation_data=valid_generator,
+        validation_steps=valid_steps,
+        max_queue_size=batch_size,
+        workers=12,
+        callbacks=[checkpointer, earlystopper])
+    logging.info('Training finished in {}'.format((time.time() - start_time)))
+
+
+def test(data, model_file, batch_size=128):
+    data, test_df = data
+    data, labels = data
+    generator = DataGenerator(batch_size, nb_classes)
+    generator.fit(data, labels)
     start_time = time.time()
-    model = load_model(model_path)
+    model = load_model(model_file)
     logging.info('Loading time: %d' % (time.time() - start_time))
     # orgs = ['9606', '10090', '10116', '7227', '7955',
     #         '559292', '3702', '284812', '6239',
@@ -348,7 +350,7 @@ def model(params, batch_size=128, epochs=6, is_train=True):
     start_time = time.time()
     test_steps = int(math.ceil(test_data[0].shape[0] / batch_size)) + 1
     preds = model.predict_generator(
-        test_generator, steps=test_steps, verbose=1)
+        generator, steps=test_steps, verbose=1)
 
     running_time = time.time() - start_time
     logging.info('Running time: %d %d' % (running_time, len(test_data[0])))
@@ -372,7 +374,7 @@ def model(params, batch_size=128, epochs=6, is_train=True):
         {
             'proteins': proteins, 'predictions': predictions })
     #         'gos': test_df['gos'].values, 'labels': test_df['labels'].values})
-    df.to_pickle(DATA_ROOT + 'human-' + FUNCTION + '-preds.pkl')
+    df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-preds.pkl')
     # logging.info('Done in %d sec' % (time.time() - start_time))
 
     # function_centric_performance(functions, preds.T, test_labels.T)

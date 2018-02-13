@@ -88,10 +88,10 @@ def get_gene_ontology(filename='go.obo'):
                     obj['is_obsolete'] = True
     if obj is not None:
         go[obj['id']] = obj
-    for go_id in go.keys():
+    for go_id in list(go.keys()):
         if go[go_id]['is_obsolete']:
             del go[go_id]
-    for go_id, val in go.iteritems():
+    for go_id, val in go.items():
         if 'children' not in val:
             val['children'] = set()
         for p_id in val['is_a']:
