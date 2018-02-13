@@ -120,7 +120,7 @@ def main(function, device, org, is_train, param):
     # nb_filters = [16, 32, 64, 128]
     # nb_convs = [1, 2, 3, 4]
     # nb_dense = [1, 2, 3, 4]
-    # for i in xrange(param * 32, param * 32 + 32):
+    # for i in range(param * 32, param * 32 + 32):
     #     dim = i % 4
     #     i = i / 4
     #     nb_fil = i % 4
@@ -370,7 +370,7 @@ def test(data, model_file, batch_size=128):
     # logging.info('Saving the predictions')
     proteins = test_df['accessions']
     predictions = list()
-    for i in xrange(preds.shape[0]):
+    for i in range(preds.shape[0]):
         predictions.append(preds[i])
     df = pd.DataFrame(
         {
@@ -425,7 +425,7 @@ def performanc_by_interpro():
         rc = 0
         total = 0
         p_total = 0
-        for i in xrange(len(labels)):
+        for i in range(len(labels)):
             tp = np.sum(labels[i] * predictions[i])
             fp = np.sum(predictions[i]) - tp
             fn = np.sum(labels[i]) - tp
@@ -456,13 +456,13 @@ def performanc_by_interpro():
 
 def function_centric_performance(functions, preds, labels):
     preds = np.round(preds, 2)
-    for i in xrange(len(functions)):
+    for i in range(len(functions)):
         f_max = 0
         p_max = 0
         r_max = 0
         x = list()
         y = list()
-        for t in xrange(1, 100):
+        for t in range(1, 100):
             threshold = t / 100.0
             predictions = (preds[i, :] > threshold).astype(np.int32)
             tp = np.sum(predictions * labels[i, :])
@@ -506,7 +506,7 @@ def compute_performance(preds, labels, gos):
     p_max = 0
     r_max = 0
     t_max = 0
-    for t in xrange(1, 100):
+    for t in range(1, 100):
         threshold = t / 100.0
         predictions = (preds > threshold).astype(np.int32)
         total = 0
@@ -552,7 +552,7 @@ def compute_performance(preds, labels, gos):
 def get_gos(pred):
     mdist = 1.0
     mgos = None
-    for i in xrange(len(labels_gos)):
+    for i in range(len(labels_gos)):
         labels, gos = labels_gos[i]
         dist = distance.cosine(pred, labels)
         if mdist > dist:
