@@ -280,7 +280,7 @@ def build_model(params):
 
     model.compile(
         optimizer=optimizer,
-        loss='mean_squared_error')
+        loss='binary_crossentropy')
     logging.info(
         'Compilation finished')
     return model
