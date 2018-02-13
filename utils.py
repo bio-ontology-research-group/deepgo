@@ -164,9 +164,10 @@ class DataGenerator(object):
         self.start = 0
         self.inputs = inputs
         self.targets = targets
-        self.size = self.inputs.shape[0]
         if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
             self.size = self.inputs[0].shape[0]
+        else:
+            self.size = self.inputs.shape[0]
         self.has_targets = targets is not None
 
     def __next__(self):
