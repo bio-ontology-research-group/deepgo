@@ -357,9 +357,9 @@ def test(data, model_file, batch_size=128):
     running_time = time.time() - start_time
     logging.info('Running time: %d %d' % (running_time, len(data[0])))
     logging.info('Computing performance')
-    f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
-    roc_auc = compute_roc(preds, test_labels)
-    mcc = compute_mcc(preds_max, test_labels)
+    f, p, r, t, preds_max = compute_performance(preds, labels, test_gos)
+    roc_auc = compute_roc(preds, labels)
+    mcc = compute_mcc(preds_max, labels)
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('MCC: \t %f ' % (mcc, ))
