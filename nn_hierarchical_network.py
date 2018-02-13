@@ -332,6 +332,8 @@ def train(data, params, model_file, batch_size=128, epochs=6):
 def test(data, model_file, batch_size=128):
     data, test_df = data
     data, labels = data
+    test_gos = test_df['gos'].values
+    nb_classes = len(functions)
     generator = DataGenerator(batch_size, nb_classes)
     generator.fit(data, labels)
     start_time = time.time()
@@ -354,15 +356,15 @@ def test(data, model_file, batch_size=128):
 
     running_time = time.time() - start_time
     logging.info('Running time: %d %d' % (running_time, len(test_data[0])))
-    # logging.info('Computing performance')
-    # f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
-    # roc_auc = compute_roc(preds, test_labels)
-    # mcc = compute_mcc(preds_max, test_labels)
-    # logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
-    # logging.info('ROC AUC: \t %f ' % (roc_auc, ))
-    # logging.info('MCC: \t %f ' % (mcc, ))
-    # logging.info('%.3f & %.3f & %.3f & %.3f & %.3f' % (
-    #     f, p, r, roc_auc, mcc))
+    logging.info('Computing performance')
+    f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
+    roc_auc = compute_roc(preds, test_labels)
+    mcc = compute_mcc(preds_max, test_labels)
+    logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
+    logging.info('ROC AUC: \t %f ' % (roc_auc, ))
+    logging.info('MCC: \t %f ' % (mcc, ))
+    logging.info('%.3f & %.3f & %.3f & %.3f & %.3f' % (
+        f, p, r, roc_auc, mcc))
     # return f
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
