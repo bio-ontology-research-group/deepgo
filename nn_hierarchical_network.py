@@ -350,12 +350,12 @@ def test(data, model_file, batch_size=128):
     #     test_generator = DataGenerator(batch_size, nb_classes)
     #     test_generator.fit(test_data, test_labels)
     start_time = time.time()
-    test_steps = int(math.ceil(test_data[0].shape[0] / batch_size)) + 1
+    steps = int(math.ceil(data[0].shape[0] / batch_size)) + 1
     preds = model.predict_generator(
-        generator, steps=test_steps, verbose=1)
+        generator, steps=steps, verbose=1)
 
     running_time = time.time() - start_time
-    logging.info('Running time: %d %d' % (running_time, len(test_data[0])))
+    logging.info('Running time: %d %d' % (running_time, len(data[0])))
     logging.info('Computing performance')
     f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
