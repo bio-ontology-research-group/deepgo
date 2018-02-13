@@ -276,7 +276,7 @@ def build_model(params):
     net = concatenate(output_models, axis=1)
     model = Model(inputs=[inputs, inputs2], outputs=net)
     logging.info('Compiling the model')
-    optimizer = Adam(lr=3e-4)
+    optimizer = Adadelta(lr=3e-4)
 
     model.compile(
         optimizer=optimizer,
