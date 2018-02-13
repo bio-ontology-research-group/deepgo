@@ -1,8 +1,7 @@
 from collections import deque
-from keras import backend as K
-from keras.callbacks import ModelCheckpoint
 import warnings
 import pandas as pd
+import numpy as np
 from xml.etree import ElementTree as ET
 
 BIOLOGICAL_PROCESS = 'GO:0008150'
@@ -205,7 +204,3 @@ class DataGenerator(object):
             self.reset()
             return self.next()
 
-
-if __name__ == '__main__':
-    pass
-    get_ipro_xml()
