@@ -49,7 +49,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/phenogo/'
+DATA_ROOT = 'data/swiss/'
 MAXLEN = 1000
 REPLEN = 256
 ind = 0
@@ -134,7 +134,7 @@ def load_data(org=None):
 
     df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
 
-    test_df = pd.read_pickle(DATA_ROOT + 'mouse' + '-' + 'data' + '.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'human' + '-' + 'data' + '.pkl')
     # df = pd.concat([df, test_df], ignore_index=True)
     n = len(df)
     print(n)
@@ -201,7 +201,6 @@ def get_feature_model(params):
         filters=128,
         kernel_size=16,
         padding='valid',
-        activation='relu',
         strides=1))
     model.add(MaxPooling1D(pool_size=16, strides=8))
     model.add(Flatten())
@@ -264,7 +263,7 @@ def get_model(params):
     net = concatenate(
         [feature_model, inputs2], axis=1, name='merged')
     for i in xrange(params['nb_dense']):
-        net = Dense(params['fc_output'], activation='relu')(net)
+        net = Dense(params['fc_output'])(net)
     layers = get_layers(net)
     output_models = []
     for i in range(len(functions)):
@@ -291,7 +290,7 @@ def model(params, batch_size=128, epochs=6, is_train=True):
     logging.info("Loading Data")
     train, val, test, train_df, valid_df, test_df = load_data()
     train_df = pd.concat([train_df, valid_df])
-    test_gos = test_df['gos'].values
+    # test_gos = test_df['gos'].values
     train_data, train_labels = train
     valid_data, valid_labels = val
     test_data, test_labels = test
@@ -353,15 +352,15 @@ def model(params, batch_size=128, epochs=6, is_train=True):
 
     running_time = time.time() - start_time
     logging.info('Running time: %d %d' % (running_time, len(test_data[0])))
-    logging.info('Computing performance')
-    f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
-    roc_auc = compute_roc(preds, test_labels)
-    mcc = compute_mcc(preds_max, test_labels)
-    logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
-    logging.info('ROC AUC: \t %f ' % (roc_auc, ))
-    logging.info('MCC: \t %f ' % (mcc, ))
-    logging.info('%.3f & %.3f & %.3f & %.3f & %.3f' % (
-        f, p, r, roc_auc, mcc))
+    # logging.info('Computing performance')
+    # f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
+    # roc_auc = compute_roc(preds, test_labels)
+    # mcc = compute_mcc(preds_max, test_labels)
+    # logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
+    # logging.info('ROC AUC: \t %f ' % (roc_auc, ))
+    # logging.info('MCC: \t %f ' % (mcc, ))
+    # logging.info('%.3f & %.3f & %.3f & %.3f & %.3f' % (
+    #     f, p, r, roc_auc, mcc))
     # return f
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
@@ -371,9 +370,9 @@ def model(params, batch_size=128, epochs=6, is_train=True):
         predictions.append(preds[i])
     df = pd.DataFrame(
         {
-            'proteins': proteins, 'predictions': predictions,
-            'gos': test_df['gos'].values, 'labels': test_df['labels'].values})
-    df.to_pickle(DATA_ROOT + 'mouse-' + FUNCTION + '-preds.pkl')
+            'proteins': proteins, 'predictions': predictions })
+    #         'gos': test_df['gos'].values, 'labels': test_df['labels'].values})
+    df.to_pickle(DATA_ROOT + 'human-' + FUNCTION + '-preds.pkl')
     # logging.info('Done in %d sec' % (time.time() - start_time))
 
     # function_centric_performance(functions, preds.T, test_labels.T)
