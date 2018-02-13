@@ -24,9 +24,6 @@ from utils import (
     get_parents,
     DataGenerator,
     FUNC_DICT,
-    MyCheckpoint,
-    save_model_weights,
-    load_model_weights,
     get_ipro)
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.preprocessing import sequence
