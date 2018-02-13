@@ -66,8 +66,9 @@ ind = 0
     default=None,
     help='Organism id for filtering test set')
 @ck.option('--is-train', is_flag=True)
+@ck.option('--epochs', default=12, help='Number of epochs to train')
 @ck.option('--param', default=0, help='Param index 0-7')
-def main(function, device, org, is_train, param):
+def main(function, device, org, is_train, epochs, param):
     global FUNCTION
     FUNCTION = function
     global GO_ID
@@ -111,7 +112,7 @@ def main(function, device, org, is_train, param):
     }
     model_file = DATA_ROOT + 'model_' + FUNCTION + '.h5'
     if is_train:
-        train(train_valid_data, params, model_file)
+        train(train_valid_data, params, model_file, epochs=epochs)
     test(test_data, model_file)
     # dims = [64, 128, 256, 512]
     # nb_filters = [16, 32, 64, 128]
@@ -285,7 +286,7 @@ def build_model(params):
     return model
 
 
-def train(data, params, model_file, batch_size=128, epochs=6):
+def train(data, params, model_file, batch_size=128, epochs=12):
     # set parameters:
     nb_classes = len(functions)
     start_time = time.time()
