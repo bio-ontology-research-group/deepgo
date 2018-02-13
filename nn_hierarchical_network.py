@@ -15,7 +15,7 @@ from keras.layers.merge import concatenate, maximum
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
     Conv1D, MaxPooling1D)
-from keras.optimizers import Adam, RMSprop, Adadelta
+from keras.optimizers import Adam, RMSprop, Adadelta, SGD
 from sklearn.metrics import classification_report
 from utils import (
     get_gene_ontology,
@@ -273,15 +273,13 @@ def build_model(params):
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
     net = concatenate(output_models, axis=1)
-    # net = Dense(1024, activation='relu')(merged)
-    # net = Dense(len(functions), activation='sigmoid')(net)
     model = Model(inputs=[inputs, inputs2], outputs=net)
     logging.info('Compiling the model')
-    optimizer = RMSprop(lr=params['learning_rate'])
+    optimizer = SGD()
 
     model.compile(
         optimizer=optimizer,
-        loss='binary_crossentropy')
+        loss='mean_squared_error')
     logging.info(
         'Compilation finished')
     return model
