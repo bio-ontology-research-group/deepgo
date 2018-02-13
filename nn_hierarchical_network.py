@@ -308,9 +308,9 @@ def train(data, params, model_file, batch_size=128, epochs=6):
         verbose=1, save_best_only=True)
     earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
 
-    train_generator = DataGenerator(batch_size, nb_classes)
+    train_generator = DataGenerator(batch_size)
     train_generator.fit(train_data, train_labels)
-    valid_generator = DataGenerator(batch_size, nb_classes)
+    valid_generator = DataGenerator(batch_size)
     valid_generator.fit(valid_data, valid_labels)
     
     logging.info('Starting training the model')
@@ -334,7 +334,7 @@ def test(data, model_file, batch_size=128):
     data, labels = data
     test_gos = test_df['gos'].values
     nb_classes = len(functions)
-    generator = DataGenerator(batch_size, nb_classes)
+    generator = DataGenerator(batch_size)
     generator.fit(data, labels)
     start_time = time.time()
     model = load_model(model_file)

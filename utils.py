@@ -134,90 +134,6 @@ def get_go_set(go, go_id):
             q.append(ch_id)
     return go_set
 
-
-def save_model_weights(model, filepath):
-    if hasattr(model, 'flattened_layers'):
-        # Support for legacy Sequential/Merge behavior.
-        flattened_layers = model.flattened_layers
-    else:
-        flattened_layers = model.layers
-
-    l_names = []
-    w_values = []
-    for layer in flattened_layers:
-        layer_name = layer.name
-        symbolic_weights = layer.weights
-        weight_values = K.batch_get_value(symbolic_weights)
-        if weight_values:
-            l_names.append(layer_name)
-            w_values.append(weight_values)
-    df = pd.DataFrame({
-        'layer_names': l_names,
-        'weight_values': w_values})
-    df.to_pickle(filepath)
-
-
-def load_model_weights(model, filepath):
-    ''' Name-based weight loading
-    Layers that have no matching name are skipped.
-    '''
-    if hasattr(model, 'flattened_layers'):
-        # Support for legacy Sequential/Merge behavior.
-        flattened_layers = model.flattened_layers
-    else:
-        flattened_layers = model.layers
-
-    df = pd.read_pickle(filepath)
-
-    # Reverse index of layer name to list of layers with name.
-    index = {}
-    for layer in flattened_layers:
-        if layer.name:
-            index[layer.name] = layer
-
-    # We batch weight value assignments in a single backend call
-    # which provides a speedup in TensorFlow.
-    weight_value_tuples = []
-    for row in df.iterrows():
-        row = row[1]
-        name = row['layer_names']
-        weight_values = row['weight_values']
-        if name in index:
-            symbolic_weights = index[name].weights
-            if len(weight_values) != len(symbolic_weights):
-                raise Exception('Layer named "' + layer.name +
-                                '") expects ' + str(len(symbolic_weights)) +
-                                ' weight(s), but the saved weights' +
-                                ' have ' + str(len(weight_values)) +
-                                ' element(s).')
-            # Set values.
-            for i in range(len(weight_values)):
-                weight_value_tuples.append(
-                    (symbolic_weights[i], weight_values[i]))
-    K.batch_set_value(weight_value_tuples)
-
-
-def f_score(labels, preds):
-    preds = K.round(preds)
-    tp = K.sum(labels * preds)
-    fp = K.sum(preds) - tp
-    fn = K.sum(labels) - tp
-    p = tp / (tp + fp)
-    r = tp / (tp + fn)
-    return 2 * p * r / (p + r)
-
-
-def filter_specific(go, gos):
-    go_set = set()
-    for go_id in gos:
-        go_set.add(go_id)
-    for go_id in gos:
-        anchestors = get_anchestors(go, go_id)
-        anchestors.discard(go_id)
-        go_set -= anchestors
-    return list(go_set)
-
-
 def read_fasta(lines):
     seqs = list()
     info = list()
@@ -238,41 +154,19 @@ def read_fasta(lines):
     return info, seqs
 
 
-class MyCheckpoint(ModelCheckpoint):
-    def on_epoch_end(self, epoch, logs={}):
-        filepath = self.filepath.format(epoch=epoch, **logs)
-        current = logs.get(self.monitor)
-        if current is None:
-            warnings.warn('Can save best model only with %s available, '
-                          'skipping.' % (self.monitor), RuntimeWarning)
-        else:
-            if self.monitor_op(current, self.best):
-                if self.verbose > 0:
-                    print('Epoch %05d: %s improved from %0.5f to %0.5f,'
-                          ' saving model to %s'
-                          % (epoch, self.monitor, self.best,
-                             current, filepath))
-                self.best = current
-                save_model_weights(self.model, filepath)
-            else:
-                if self.verbose > 0:
-                    print('Epoch %05d: %s did not improve' %
-                          (epoch, self.monitor))
-
-
 class DataGenerator(object):
 
-    def __init__(self, batch_size, num_outputs):
+    def __init__(self, batch_size, is_sparse=False):
         self.batch_size = batch_size
-        self.num_outputs = num_outputs
+        self.is_sparse = is_sparse
 
-    def fit(self, inputs, targets):
+    def fit(self, inputs, targets=None):
         self.start = 0
         self.inputs = inputs
         self.targets = targets
-        self.size = len(self.inputs)
+        self.size = self.inputs.shape[0]
         if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
-            self.size = len(self.inputs[0])
+            self.size = self.inputs[0].shape[0]
         self.has_targets = targets is not None
 
     def __next__(self):
@@ -283,24 +177,27 @@ class DataGenerator(object):
 
     def next(self):
         if self.start < self.size:
-            # output = []
-            # if self.has_targets:
-            #     labels = self.targets
-            #     for i in range(self.num_outputs):
-            #         output.append(
-            #             labels[self.start:(self.start + self.batch_size), i])
-            if self.has_targets:
-                labels = self.targets[self.start:(self.start + self.batch_size), :]
+            batch_index = np.arange(
+                self.start, min(self.size, self.start + self.batch_size))
             if isinstance(self.inputs, tuple) or isinstance(self.inputs, list):
                 res_inputs = []
                 for inp in self.inputs:
-                    res_inputs.append(
-                        inp[self.start:(self.start + self.batch_size)])
+                    if self.is_sparse:
+                        res_inputs.append(
+                            inp[batch_index, :].toarray())
+                    else:
+                        res_inputs.append(inp[batch_index, :])
             else:
-                res_inputs = self.inputs[self.start:(
-                    self.start + self.batch_size)]
+                if self.is_sparse:
+                    res_inputs = self.inputs[batch_index, :].toarray()
+                else:
+                    res_inputs = self.inputs[batch_index, :]
             self.start += self.batch_size
             if self.has_targets:
+                if self.is_sparse:
+                    labels = self.targets[batch_index, :].toarray()
+                else:
+                    labels = self.targets[batch_index, :]
                 return (res_inputs, labels)
             return res_inputs
         else:
