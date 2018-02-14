@@ -276,11 +276,11 @@ def build_model(params):
     net = concatenate(output_models, axis=1)
     model = Model(inputs=[inputs, inputs2], outputs=net)
     logging.info('Compiling the model')
-    optimizer = RMSprop()
+    optimizer = SGD()
 
     model.compile(
         optimizer=optimizer,
-        loss='binary_crossentropy')
+        loss='mean_squared_error')
     logging.info(
         'Compilation finished')
     return model
