@@ -269,11 +269,12 @@ def build_model(params):
         [feature_model, inputs2], axis=1, name='merged')
     for i in range(params['nb_dense']):
         net = Dense(params['fc_output'])(net)
-    layers = get_layers(net)
-    output_models = []
-    for i in range(len(functions)):
-        output_models.append(layers[functions[i]]['output'])
-    net = concatenate(output_models, axis=1)
+    # layers = get_layers(net)
+    # output_models = []
+    # for i in range(len(functions)):
+    #     output_models.append(layers[functions[i]]['output'])
+    # net = concatenate(output_models, axis=1)
+    net = Dense(len(functions), activation='sigmoid')(net)
     model = Model(inputs=[inputs, inputs2], outputs=net)
     logging.info('Compiling the model')
     optimizer = RMSprop()
