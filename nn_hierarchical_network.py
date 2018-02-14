@@ -267,8 +267,8 @@ def build_model(params):
     feature_model = get_feature_model(params)(inputs)
     net = concatenate(
         [feature_model, inputs2], axis=1, name='merged')
-    for i in range(params['nb_dense']):
-        net = Dense(params['fc_output'])(net)
+    # for i in range(params['nb_dense']):
+    #     net = Dense(params['fc_output'])(net)
     # layers = get_layers(net)
     # output_models = []
     # for i in range(len(functions)):
