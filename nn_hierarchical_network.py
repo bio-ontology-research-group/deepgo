@@ -161,19 +161,16 @@ def load_data(org=None):
     # test_df = test_df[test_df['orgs'].isin(orgs)]
 
     def reshape(values):
-        values = np.hstack(values).reshape(
-            len(values), len(values[0]))
+        n = len(values)
+        dim = 1
+        if isinstance(values[0], np.ndarray):
+            dim = len(values[0])
+        values = np.hstack(values).reshape(n, dim)
         return values
-
-    def normalize_minmax(values):
-        mn = np.min(values)
-        mx = np.max(values)
-        if mx - mn != 0.0:
-            return (values - mn) / (mx - mn)
-        return values - mn
 
     def get_values(data_frame):
         labels = reshape(data_frame['labels'].values)
+        index = reshape(data_frame.index.values)
         c = 0
         for i, row in data_frame.iterrows():
             if not isinstance(row['embeddings'], np.ndarray):
@@ -184,7 +181,7 @@ def load_data(org=None):
             data_frame['ngrams'].values, maxlen=MAXLEN)
         ngrams = reshape(ngrams)
         rep = reshape(data_frame['embeddings'].values)
-        data = (ngrams, rep)
+        data = (ngrams, rep, index)
         return data, labels
 
     train = get_values(train_df)
@@ -211,6 +208,17 @@ def get_feature_model(params):
     model.add(Flatten())
     return model
 
+
+def get_protein_embed(params):
+    embedding_dims = 128
+    max_features = 500000
+    model = Sequential()
+    model.add(Embedding(
+        max_features,
+        embedding_dims,
+        input_length=1))
+    model.add(Flatten())
+    return model
 
 def get_node_name(node_id):
     node_id = node_id.replace('GO:', '')
@@ -264,9 +272,11 @@ def build_model(params):
     logging.info("Building the model")
     inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
     inputs2 = Input(shape=(REPLEN,), dtype='float32', name='input2')
+    inputs3 = Input(shape=(1,), dtype='int32', name='input3')
     feature_model = get_feature_model(params)(inputs)
+    prot_embed = get_protein_embed(params)(inputs3)
     net = concatenate(
-        [feature_model, inputs2], axis=1, name='merged')
+        [feature_model, inputs2, prot_embed], axis=1, name='merged')
     net = Dense(1024)(net)
     net = Dropout(0.5)(net)
     # for i in range(params['nb_dense']):
@@ -277,7 +287,7 @@ def build_model(params):
     #     output_models.append(layers[functions[i]]['output'])
     # net = concatenate(output_models, axis=1)
     net = Dense(len(functions), activation='sigmoid')(net)
-    model = Model(inputs=[inputs, inputs2], outputs=net)
+    model = Model(inputs=[inputs, inputs2, inputs3], outputs=net)
     logging.info('Compiling the model')
     optimizer = RMSprop()
 
