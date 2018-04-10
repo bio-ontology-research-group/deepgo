@@ -4,3 +4,4 @@ venv/
 *.out
 *.pdf
 screenlog.*
+*.h5

@@ -8,36 +8,23 @@ from utils import (
     get_anchestors,
     FUNC_DICT,
     EXP_CODES)
-from aaindex import is_ok
+from aaindex import is_ok, AAINDEX
 import click as ck
+from subprocess import Popen, PIPE
 
-DATA_ROOT = 'data/phenogo/'
-
+DATA_ROOT = 'data/latest/'
+MAXLEN = 2000
 
 @ck.command()
-@ck.option(
-    '--function',
-    default='mf',
-    help='Function (mf, bp, cc)')
-@ck.option(
-    '--split',
-    default=0.8,
-    help='Train test split')
-def main(function, split):
-    global SPLIT
-    SPLIT = split
-    global GO_ID
-    GO_ID = FUNC_DICT[function]
+def main():
     global go
-    go = get_gene_ontology('go.obo')
-    global FUNCTION
-    FUNCTION = function
-    func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
+    go = get_gene_ontology(DATA_ROOT + 'go.obo', with_rels=True)
+    func_df = pd.read_pickle(DATA_ROOT + 'functions.pkl')
     global functions
     functions = func_df['functions'].values
     global func_set
-    func_set = get_go_set(go, GO_ID)
-    print len(functions)
+    func_set = set(functions)
+    print(len(functions))
     global go_indexes
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
@@ -53,56 +40,28 @@ def load_data():
     gram_len = len(ngram_df['ngrams'][0])
     print('Gram length:', gram_len)
     print('Vocabulary size:', len(vocab))
-    proteins = list()
-    gos = list()
-    labels = list()
     ngrams = list()
-    sequences = list()
-    accessions = list()
-    status = list()
-    df = pd.read_pickle(DATA_ROOT + 'mouse-sequences.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
     # Filtering data by sequences
     index = list()
     for i, row in df.iterrows():
-        if is_ok(row['sequences']):
+        seq = row['sequences']
+        if is_ok(seq) and len(seq) <= MAXLEN:
             index.append(i)
     df = df.loc[index]
 
     for i, row in df.iterrows():
-        go_list = []
-        for item in row['annots']:
-            items = item.split('|')
-            # if items[1] in EXP_CODES:
-            #     go_list.append(items[0])
-            go_list.append(items[0])
-        go_set = set()
-        for go_id in go_list:
-            if go_id in func_set:
-                go_set |= get_anchestors(go, go_id)
-        # if not go_set or GO_ID not in go_set:
-        #     continue
-        go_set.discard(GO_ID)
-        gos.append(go_list)
-        proteins.append(row['proteins'])
-        accessions.append(row['accessions'])
         seq = row['sequences']
-        sequences.append(seq)
         grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
-        for i in xrange(len(seq) - gram_len + 1):
+        for i in range(len(seq) - gram_len + 1):
             grams[i] = vocab[seq[i: (i + gram_len)]]
         ngrams.append(grams)
-        label = np.zeros((len(functions),), dtype='int32')
-        for go_id in go_set:
-            if go_id in go_indexes:
-                label[go_indexes[go_id]] = 1
-        labels.append(label)
     res_df = pd.DataFrame({
-        'accessions': accessions,
-        'proteins': proteins,
+        'accessions': df['accessions'],
+        'proteins': df['proteins'],
         'ngrams': ngrams,
-        'labels': labels,
-        'gos': gos,
-        'sequences': sequences})
+        'functions': df['functions'],
+        'sequences': df['sequences']})
     print(len(res_df))
     return res_df
 
@@ -119,19 +78,36 @@ def load_org_df():
 
 def run(*args, **kwargs):
     df = load_data()
-    # org_df = load_org_df()
+    org_df = load_org_df()
     rep_df = load_rep_df()
-    # df = pd.merge(df, org_df, on='proteins', how='left')
+    df = pd.merge(df, org_df, on='proteins', how='left')
     df = pd.merge(df, rep_df, on='accessions', how='left')
-    missing_rep = 0
+    p = Popen(['blastp', '-db', 'data/embeddings.fa',
+               '-max_target_seqs', '1', '-num_threads', '128',
+               '-outfmt', '6 qseqid sseqid'], stdin=PIPE, stdout=PIPE)
     for i, row in df.iterrows():
         if not isinstance(row['embeddings'], np.ndarray):
-            row['embeddings'] = np.zeros((256,), dtype='float32')
-            missing_rep += 1
-    print('Missing network reps:', missing_rep)
-    df = df[df['orgs'] == '10090']
+            p.stdin.write(('>' + row['accessions'] + '\n' + row['sequences'] + '\n').encode('utf-8'))
+    p.stdin.close()
+    
+    prot_ids = {}
+    if p.wait() == 0:
+        for line in p.stdout:
+            print(line)
+            it = line.strip().split('\t')
+            prot_ids[it[0]] = it[1]
+    prots = rep_df[rep_df['accessions'].isin(set(prot_ids.values()))]
+    embeds_dict = {}
+    for i, row in prots.iterrows():
+        embeds_dict[row['accessions']] = row['embeddings']
+
+    for i, row in df.iterrows():
+        if not isinstance(row['embeddings'], np.ndarray):
+            df.at[i, 'embeddings'] = embeds_dict[row['accessions']]
+
+    #df = df[df['orgs'] == '10090']
     print(len(df))
-    df.to_pickle(DATA_ROOT + 'mouse-' + FUNCTION + '.pkl')
+    df.to_pickle(DATA_ROOT + 'data.pkl')
     return
     # index = df.index.values
     # np.random.seed(seed=0)

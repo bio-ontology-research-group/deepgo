@@ -46,8 +46,8 @@ def read_fasta(filename):
 
 
 def get_annotations():
-    w = open('data/cafa3/tremble.tab', 'w')
-    with gz.open('data/uniprot_trembl.dat.gz', 'r') as f:
+    w = open('data/latest/annots.tab', 'w')
+    with gz.open('data/latest/uniprot_sprot.dat.gz', 'r') as f:
         prot_id = ''
         prot_ac = ''
         annots = list()
@@ -81,12 +81,12 @@ def get_annotations():
 
 def get_sequences():
     prots = set()
-    with open('data/cafa3/tremble.tab') as f:
+    with open('data/latest/annots.tab') as f:
         for line in f:
             it = line.strip().split('\t')
             prots.add(it[0])
-    w = open('data/cafa3/tremble_sequences.tab', 'w')
-    with gz.open('data/uniprot_trembl.dat.gz', 'r') as f:
+    w = open('data/latest/sequences.tab', 'w')
+    with gz.open('data/latest/uniprot_sprot.dat.gz', 'r') as f:
         prot_id = ''
         for line in f:
             items = line.strip().split('   ')
@@ -452,12 +452,12 @@ def main(*args, **kwargs):
     # merged_annotations()
     # compute_performance()
     # get_results('model_seq')
-    get_data()
+    # get_data()
     # cafa3()
     # fasta2tabs()
     # cafa2string()
-    # get_annotations()
-    # get_sequences()
+    get_annotations()
+    get_sequences()
     # sprot2tabs()
 
 

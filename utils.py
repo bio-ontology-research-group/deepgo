@@ -53,11 +53,11 @@ def get_ipro_anchestors(ipro, ipro_id):
     return ipro_set
 
 
-def get_gene_ontology(filename='go.obo'):
+def get_gene_ontology(filename='data/go.obo', with_rels=False):
     # Reading Gene Ontology from OBO Formatted file
     go = dict()
     obj = None
-    with open('data/' + filename, 'r') as f:
+    with open(filename, 'r') as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -81,6 +81,10 @@ def get_gene_ontology(filename='go.obo'):
                     obj['id'] = l[1]
                 elif l[0] == 'is_a':
                     obj['is_a'].append(l[1].split(' ! ')[0])
+                elif with_rels and l[0] == 'relationship':
+                    it = l[1].split()
+                    if it[0] == 'part_of':
+                        obj['is_a'].append(it[1])
                 elif l[0] == 'name':
                     obj['name'] = l[1]
                 elif l[0] == 'is_obsolete' and l[1] == 'true':

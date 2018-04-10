@@ -7,13 +7,14 @@ python nn_hierarchical_network.py
 import numpy as np
 import pandas as pd
 import click as ck
-from keras.models import Sequential, Model, load_model
+from keras.models import Sequential, Model, model_from_json
 from keras.layers import (
     Dense, Dropout, Activation, Input,
-    Flatten, Highway, merge, BatchNormalization)
+    Flatten, Highway, BatchNormalization)
+from keras.layers.merge import concatenate, maximum
 from keras.layers.embeddings import Embedding
 from keras.layers.convolutional import (
-    Convolution1D, MaxPooling1D)
+    Conv1D, MaxPooling1D)
 from keras.optimizers import Adam, RMSprop, Adadelta
 from sklearn.metrics import classification_report
 from utils import (
@@ -21,14 +22,9 @@ from utils import (
     get_go_set,
     get_anchestors,
     get_parents,
-    DataGenerator,
     FUNC_DICT,
-    MyCheckpoint,
-    save_model_weights,
-    load_model_weights,
     get_ipro)
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.preprocessing import sequence
+from keras.callbacks import EarlyStopping, ModelCheckpoint, CSVLogger
 from keras import backend as K
 import sys
 from collections import deque
@@ -37,27 +33,57 @@ import logging
 import tensorflow as tf
 from sklearn.metrics import roc_curve, auc, matthews_corrcoef
 from scipy.spatial import distance
-from multiprocessing import Pool
+import math
+import string
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
+config.allow_soft_placement = True
 sess = tf.Session(config=config)
 K.set_session(sess)
 
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/swiss/'
-MAXLEN = 1000
-REPLEN = 256
-ind = 0
+DATA_ROOT = 'data/latest/'
+MAXLEN = 2000
+
+class DFGenerator(object):
+
+    def __init__(self, batch_size):
+        self.batch_size = batch_size
+    
+    def fit(self, df):
+        self.start = 0
+        self.size = len(df)
+        self.df = df
+    
+    def __next__(self):
+        return self.next()
+
+    def reset(self):
+        self.start = 0
+
+    def next(self):
+        if self.start < self.size:
+            batch_index = np.arange(
+                self.start, min(self.size, self.start + self.batch_size))
+            df = self.df.iloc[batch_index]
+            data = np.zeros((len(df), MAXLEN), dtype=np.int32)
+            labels = np.zeros((len(df), nb_classes), dtype=np.int32)
+            for i, row in enumerate(df.itertuples()):
+                data[i, 0:len(row.ngrams)] = row.ngrams
+                for go_id in row.functions:
+                    if go_id in go_indexes:
+                        labels[i, go_indexes[go_id]] = 1
+            self.start += self.batch_size
+            return (data, labels)
+        else:
+            self.reset()
+            return self.next()
 
 
 @ck.command()
-@ck.option(
-    '--function',
-    default='mf',
-    help='Ontology id (mf, bp, cc)')
 @ck.option(
     '--device',
     default='gpu:0',
@@ -66,49 +92,59 @@ ind = 0
     '--org',
     default=None,
     help='Organism id for filtering test set')
-@ck.option('--train', is_flag=True)
-def main(function, device, org, train):
-    global FUNCTION
-    FUNCTION = function
-    global GO_ID
-    GO_ID = FUNC_DICT[FUNCTION]
+@ck.option(
+    '--model-file',
+    default=(DATA_ROOT + 'model'),
+    help='Model filename')
+@ck.option('--is-train', is_flag=True)
+@ck.option(
+    '--batch-size',
+    default=128,
+    help='Batch size for training and testing')
+@ck.option(
+    '--epochs',
+    default=12,
+    help='Number of epochs to train')
+def main(device, org, model_file, is_train, batch_size, epochs):
     global go
-    go = get_gene_ontology('go.obo')
-    global ORG
-    ORG = org
-    func_df = pd.read_pickle(DATA_ROOT + FUNCTION + '.pkl')
+    go = get_gene_ontology(DATA_ROOT + 'go.obo', with_rels=True)
+    func_df = pd.read_pickle(DATA_ROOT + 'functions.pkl')
     global functions
     functions = func_df['functions'].values
     global func_set
     func_set = set(functions)
-    global all_functions
-    all_functions = get_go_set(go, GO_ID)
-    logging.info('Functions: %s %d' % (FUNCTION, len(functions)))
-    if ORG is not None:
+    global nb_classes
+    nb_classes = len(functions)
+    logging.info('Functions: %d' % nb_classes)
+    if org is not None:
         logging.info('Organism %s' % ORG)
     global go_indexes
-    go_indexes = dict()
+    go_indexes = {}
     for ind, go_id in enumerate(functions):
         go_indexes[go_id] = ind
-    global node_names
-    node_names = set()
+    global names
+    names = {}
+    global digits
+    digits = string.digits + string.ascii_letters
+    
+    train_df, valid_df, test_df = load_data(org=org)
     with tf.device('/' + device):
-        model(is_train=train)
-    # performanc_by_interpro()
+        if is_train:
+            train_model(train_df, valid_df, model_file, batch_size, epochs)
+        test_model(test_df, model_file, batch_size)
 
-
-def load_data():
-
-    df = pd.read_pickle(DATA_ROOT + 'train' + '-' + FUNCTION + '.pkl')
+def load_data(org):
+    df = pd.read_pickle(DATA_ROOT + 'data.pkl')
     n = len(df)
-    index = df.index.values
-    valid_n = int(n * 0.8)
-    train_df = df.loc[index[:valid_n]]
-    valid_df = df.loc[index[valid_n:]]
-    test_df = pd.read_pickle(DATA_ROOT + 'test' + '-' + FUNCTION + '.pkl')
-    if ORG is not None:
+    index = np.arange(n)
+    train_n = int(n * 0.8)
+    valid_n = int(train_n * 0.8)
+    train_df = df.iloc[index[:valid_n]]
+    valid_df = df.iloc[index[valid_n:train_n]]
+    test_df = df.iloc[index[train_n:]]
+    if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
-        test_df = test_df[test_df['orgs'] == ORG]
+        test_df = test_df[test_df['orgs'] == org]
         logging.info('Filtered test size: %d' % len(test_df))
 
     # Filter by type
@@ -116,33 +152,7 @@ def load_data():
     # orgs = org_df['orgs']
     # test_df = test_df[test_df['orgs'].isin(orgs)]
 
-    def reshape(values):
-        values = np.hstack(values).reshape(
-            len(values), len(values[0]))
-        return values
-
-    def normalize_minmax(values):
-        mn = np.min(values)
-        mx = np.max(values)
-        if mx - mn != 0.0:
-            return (values - mn) / (mx - mn)
-        return values - mn
-
-    def get_values(data_frame):
-        print(data_frame['labels'].values.shape)
-        labels = reshape(data_frame['labels'].values)
-        ngrams = sequence.pad_sequences(
-            data_frame['ngrams'].values, maxlen=MAXLEN)
-        ngrams = reshape(ngrams)
-        rep = reshape(data_frame['embeddings'].values)
-        data = ngrams
-        return data, labels
-
-    train = get_values(train_df)
-    valid = get_values(valid_df)
-    test = get_values(test_df)
-
-    return train, valid, test, train_df, valid_df, test_df
+    return train_df, valid_df, test_df
 
 
 def get_feature_model():
@@ -152,114 +162,51 @@ def get_feature_model():
     model.add(Embedding(
         max_features,
         embedding_dims,
-        input_length=MAXLEN,
-        dropout=0.2))
-    model.add(Convolution1D(
-        nb_filter=32,
-        filter_length=128,
-        border_mode='valid',
-        activation='relu',
-        subsample_length=1))
-    model.add(MaxPooling1D(pool_length=64, stride=32))
+        input_length=MAXLEN))
+    model.add(Conv1D(
+        filters=128,
+        kernel_size=16,
+        padding='valid',
+        dilation_rate=2,
+        strides=1))
+    model.add(MaxPooling1D(pool_size=16, strides=4))
     model.add(Flatten())
     return model
 
 
-def merge_outputs(outputs, name):
-    if len(outputs) == 1:
-        return outputs[0]
-    return merge(outputs, mode='concat', name=name, concat_axis=1)
-
-
-def merge_nets(nets, name):
-    if len(nets) == 1:
-        return nets[0]
-    return merge(nets, mode='sum', name=name)
-
-
-def get_node_name(go_id, unique=False):
+def get_node_name(go_id):
     name = go_id.split(':')[1]
-    if not unique:
-        return name
-    if name not in node_names:
-        node_names.add(name)
-        return name
-    i = 1
-    while (name + '_' + str(i)) in node_names:
-        i += 1
-    name = name + '_' + str(i)
-    node_names.add(name)
     return name
+    # if go_id in names:
+    #     return names[go_id]
+    # n = len(names)
+    # b = len(digits)
+    # name = ''
+    # while n > 0:
+    #     name += digits[n % b]
+    #     n = n // b
+    # names[go_id] = name
+    # return name
 
 
 def get_function_node(name, inputs):
-    output_name = name + '_out'
     # net = Dense(256, name=name, activation='relu')(inputs)
-    output = Dense(1, name=output_name, activation='sigmoid')(inputs)
+    output = Dense(1, name=name, activation='sigmoid')(inputs)
     return output, output
-
-
-def get_layers_recursive(inputs, node_output_dim=256):
-    layers = dict()
-    name = get_node_name(GO_ID)
-    inputs = Dense(
-        node_output_dim, activation='relu', name=name)(inputs)
-
-    def dfs(node_id, inputs):
-        name = get_node_name(node_id, unique=True)
-        net, output = get_function_node(name, inputs, node_output_dim)
-        childs = [
-            n_id for n_id in go[node_id]['children'] if n_id in func_set]
-        if node_id not in layers:
-            layers[node_id] = {'outputs': [output]}
-        else:
-            layers[node_id]['outputs'].append(output)
-        for ch_id in childs:
-            dfs(ch_id, net)
-
-    for node_id in go[GO_ID]['children']:
-        if node_id in func_set:
-            dfs(node_id, inputs)
-
-    for node_id in functions:
-        childs = get_go_set(go, node_id).intersection(func_set)
-        if len(childs) == 0:
-            if len(layers[node_id]['outputs']) == 1:
-                layers[node_id]['output'] = layers[node_id]['outputs'][0]
-            else:
-                name = get_node_name(node_id, unique=True)
-                output = merge(
-                    layers[node_id]['outputs'], mode='max', name=name)
-                layers[node_id]['output'] = output
-        else:
-            outputs = layers[node_id]['outputs']
-            for ch_id in childs:
-                outputs += layers[ch_id]['outputs']
-            name = get_node_name(node_id, unique=True)
-            output = merge(
-                outputs, mode='max', name=name)
-            layers[node_id]['output'] = output
-    return layers
 
 
 def get_layers(inputs):
     q = deque()
     layers = {}
-    name = get_node_name(GO_ID)
-    layers[GO_ID] = {'net': inputs}
-    for node_id in go[GO_ID]['children']:
-        if node_id in func_set:
-            q.append((node_id, inputs))
+    
+    for fn in FUNC_DICT:
+        layers[FUNC_DICT[fn]] = {'net': inputs}
+        for node_id in go[FUNC_DICT[fn]]['children']:
+            if node_id in func_set:
+                q.append((node_id, inputs))
     while len(q) > 0:
         node_id, net = q.popleft()
         parent_nets = [inputs]
-        # for p_id in get_parents(go, node_id):
-        #     if p_id in func_set:
-        #         parent_nets.append(layers[p_id]['net'])
-        # if len(parent_nets) > 1:
-        #     name = get_node_name(node_id) + '_parents'
-        #     net = merge(
-        #         parent_nets, mode='concat', concat_axis=1, name=name)
         name = get_node_name(node_id)
         net, output = get_function_node(name, inputs)
         if node_id not in layers:
@@ -279,122 +226,137 @@ def get_layers(inputs):
             outputs = [layers[node_id]['output']]
             for ch_id in childs:
                 outputs.append(layers[ch_id]['output'])
-            name = get_node_name(node_id) + '_max'
-            layers[node_id]['output'] = merge(
-                outputs, mode='max', name=name)
+            name = get_node_name(node_id + '_')
+            layers[node_id]['output'] = maximum(outputs, name=name)
     return layers
 
 
 def get_model():
     logging.info("Building the model")
-    inputs = Input(shape=(MAXLEN,), dtype='int32', name='input1')
-    feature_model = get_feature_model()(inputs)
-    net = Dense(1024, activation='relu')(feature_model)
+    input_seq = Input(shape=(MAXLEN,), dtype='int32', name='seq')
+    net = get_feature_model()(input_seq)
+    net = Dense(256)(net)
     layers = get_layers(net)
     output_models = []
     for i in range(len(functions)):
         output_models.append(layers[functions[i]]['output'])
-    net = merge(output_models, mode='concat', concat_axis=1)
+    net = concatenate(output_models, axis=1)
     # net = Dense(1024, activation='relu')(merged)
-    # net = Dense(len(functions), activation='sigmoid')(net)
-    model = Model(input=inputs, output=net)
+    # net = Dense(nb_classes, activation='sigmoid')(net)
+    # encoder = load_model('model_encoder.h5')
+    # inputs = encoder.inputs
+    # features = encoder.layers[1](inputs)
+    # features = Flatten()(features)
+    # encoder.summary()
+    # net = Dense(nb_classes, activation='sigmoid')(features)
+    # model = Model(encoder.layers[0].output, net)
+    
+    model = Model(input_seq, net)
+    model.load_weights('data/latest/model-pre.h5')
     logging.info('Compiling the model')
     optimizer = RMSprop()
-
     model.compile(
         optimizer=optimizer,
         loss='binary_crossentropy')
-    logging.info(
-        'Compilation finished')
+    logging.info('Compilation finished')
     return model
 
 
-def model(batch_size=128, nb_epoch=100, is_train=True):
-    # set parameters:
+def train_model(train_df, valid_df, model_file, batch_size, epochs):
     nb_classes = len(functions)
     start_time = time.time()
-    logging.info("Loading Data")
-    train, val, test, train_df, valid_df, test_df = load_data()
-    train_df = pd.concat([train_df, valid_df])
-    test_gos = test_df['gos'].values
-    train_data, train_labels = train
-    val_data, val_labels = val
-    test_data, test_labels = test
-    logging.info("Data loaded in %d sec" % (time.time() - start_time))
-    logging.info("Training data size: %d" % len(train_data))
-    logging.info("Validation data size: %d" % len(val_data))
-    logging.info("Test data size: %d" % len(test_data))
+    logging.info("Training data size: %d" % len(train_df))
+    logging.info("Validation data size: %d" % len(valid_df))
 
-    model_path = DATA_ROOT + 'models/model_seq_' + FUNCTION + '.h5'
     checkpointer = ModelCheckpoint(
-        filepath=model_path,
-        verbose=1, save_best_only=True)
-    earlystopper = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
+        filepath=model_file + '.h5',
+        verbose=1, save_best_only=True,
+        save_weights_only=True)
+    earlystopper = EarlyStopping(monitor='val_loss', patience=16, verbose=1)
+    logger = CSVLogger('training.csv')
 
     logging.info('Starting training the model')
 
-    train_generator = DataGenerator(batch_size, nb_classes)
-    train_generator.fit(train_data, train_labels)
-    valid_generator = DataGenerator(batch_size, nb_classes)
-    valid_generator.fit(val_data, val_labels)
-    test_generator = DataGenerator(batch_size, nb_classes)
-    test_generator.fit(test_data, test_labels)
+    train_generator = DFGenerator(batch_size)
+    train_generator.fit(train_df)
+    valid_generator = DFGenerator(batch_size)
+    valid_generator.fit(valid_df)
 
-    if is_train:
-        model = get_model()
-        model.fit_generator(
-            train_generator,
-            samples_per_epoch=len(train_data),
-            nb_epoch=nb_epoch,
-            validation_data=valid_generator,
-            nb_val_samples=len(val_data),
-            max_q_size=batch_size,
-            callbacks=[checkpointer, earlystopper])
+    valid_steps = int(math.ceil(len(valid_df) / batch_size))
+    train_steps = int(math.ceil(len(train_df) / batch_size))
 
-    logging.info('Loading best model')
-    model = load_model(model_path)
+    model = get_model()
+    model_json = model.to_json()
+    f = open(model_file + '.json', 'w')
+    f.write(model_json)
+    f.close()
+    
+    model.summary()
+    model.fit_generator(
+        train_generator,
+        steps_per_epoch=train_steps,
+        epochs=epochs,
+        validation_data=valid_generator,
+        validation_steps=valid_steps,
+        max_queue_size=batch_size,
+        workers=12,
+        callbacks=[logger, checkpointer, earlystopper])
 
-    model = model.layers[1]
-    output = model.predict_generator(test_generator, val_samples=len(test_data))
-    print(output.shape)
-    return
+    
+def test_model(test_df, model_file, batch_size):
+    generator = DFGenerator(batch_size)
+    generator.fit(test_df)
+    steps = int(math.ceil(len(test_df) / batch_size))
+
+    logging.info('Loading the model')
+    model_json = open(model_file + '.json').read()
+    model = model_from_json(model_json)
+    model.load_weights(model_file + '.h5')
+    logging.info('Compiling model')
+    model.compile(optimizer='rmsprop', loss='binary_crossentropy')
+    logging.info('Evaluating model')
+    loss = model.evaluate_generator(generator, steps=steps)
+    logging.info('Test loss %f' % loss)
+    
     logging.info('Predicting')
-    preds = model.predict_generator(
-        test_generator, val_samples=len(test_data))
-    # incon = 0
-    # for i in xrange(len(test_data)):
-    #     for j in xrange(len(functions)):
-    #         childs = set(go[functions[j]]['children']).intersection(func_set)
-    #         ok = True
-    #         for n_id in childs:
-    #             if preds[i, j] < preds[i, go_indexes[n_id]]:
-    #                 preds[i, j] = preds[i, go_indexes[n_id]]
-    #                 ok = False
-    #         if not ok:
-    #             incon += 1
+    generator.reset()
+    preds = model.predict_generator(generator, steps=steps)
+    nb_classes = len(functions)
+    test_labels = np.zeros((len(test_df), nb_classes), dtype=np.int32)
+    for i, row in enumerate(test_df.itertuples()):
+        for go_id in row.functions:
+            if go_id in go_indexes:
+                test_labels[i, go_indexes[go_id]] = 1
+    mf = get_go_set(go, FUNC_DICT['mf'])
+    bp = get_go_set(go, FUNC_DICT['bp'])
+    cc = get_go_set(go, FUNC_DICT['cc'])
+    bp_index = list()
+    mf_index = list()
+    cc_index = list()
+    for i, go_id in enumerate(functions):
+        if go_id in mf:
+            mf_index.append(i)
+        elif go_id in bp:
+            bp_index.append(i)
+        elif go_id in cc:
+            cc_index.append(i)
+    mf_labels = test_labels[:, mf_index]
+    bp_labels = test_labels[:, bp_index]
+    cc_labels = test_labels[:, cc_index]
+    mf_preds = preds[:, mf_index]
+    bp_preds = preds[:, bp_index]
+    cc_preds = preds[:, cc_index]
+    test_gos = test_df['functions'].values
     logging.info('Computing performance')
-    f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
-    roc_auc = compute_roc(preds, test_labels)
-    mcc = compute_mcc(preds_max, test_labels)
+    f, p, r, t, preds_max = compute_performance(mf_preds, mf_labels, test_gos)
+    roc_auc = compute_roc(mf_preds, mf_labels)
+    mcc = compute_mcc(preds_max, mf_labels)
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('MCC: \t %f ' % (mcc, ))
     print('%.3f & %.3f & %.3f & %.3f & %.3f' % (
         f, p, r, roc_auc, mcc))
-    # logging.info('Inconsistent predictions: %d' % incon)
-    # logging.info('Saving the predictions')
-    # proteins = test_df['proteins']
-    # predictions = list()
-    # for i in xrange(preds_max.shape[0]):
-    #     predictions.append(preds_max[i])
-    # df = pd.DataFrame(
-    #     {
-    #         'proteins': proteins, 'predictions': predictions,
-    #         'gos': test_df['gos'], 'labels': test_df['labels']})
-    # df.to_pickle(DATA_ROOT + 'test-' + FUNCTION + '-predictions.pkl')
-    # logging.info('Done in %d sec' % (time.time() - start_time))
-
-    function_centric_performance(functions, preds.T, test_labels.T)
+    # function_centric_performance(functions, preds.T, test_labels.T)
 
 
 def load_prot_ipro():
@@ -440,7 +402,7 @@ def performanc_by_interpro():
         rc = 0
         total = 0
         p_total = 0
-        for i in xrange(len(labels)):
+        for i in range(len(labels)):
             tp = np.sum(labels[i] * predictions[i])
             fp = np.sum(predictions[i]) - tp
             fn = np.sum(labels[i]) - tp
@@ -477,7 +439,7 @@ def function_centric_performance(functions, preds, labels):
         r_max = 0
         x = list()
         y = list()
-        for t in xrange(1, 100):
+        for t in range(1, 100):
             threshold = t / 100.0
             predictions = (preds[i, :] > threshold).astype(np.int32)
             tp = np.sum(predictions * labels[i, :])
@@ -520,7 +482,7 @@ def compute_performance(preds, labels, gos):
     p_max = 0
     r_max = 0
     t_max = 0
-    for t in xrange(1, 100):
+    for t in range(1, 100):
         threshold = t / 100.0
         predictions = (preds > threshold).astype(np.int32)
         total = 0
@@ -533,12 +495,12 @@ def compute_performance(preds, labels, gos):
             fp = np.sum(predictions[i, :]) - tp
             fn = np.sum(labels[i, :]) - tp
             all_gos = set()
-            for go_id in gos[i]:
-                if go_id in all_functions:
-                    all_gos |= get_anchestors(go, go_id)
-            all_gos.discard(GO_ID)
-            all_gos -= func_set
-            fn += len(all_gos)
+            # for go_id in gos[i]:
+            #     if go_id in all_functions:
+            #         all_gos |= get_anchestors(go, go_id)
+            # all_gos.discard(GO_ID)
+            # all_gos -= func_set
+            # fn += len(all_gos)
             if tp == 0 and fp == 0 and fn == 0:
                 continue
             total += 1
@@ -611,12 +573,6 @@ def compute_similarity_performance(train_df, test_df, preds):
             r += recall
             f += 2 * precision * recall / (precision + recall)
     return f / total, p / total, r / total
-
-
-def print_report(report, go_id):
-    with open(DATA_ROOT + 'reports.txt', 'a') as f:
-        f.write('Classification report for ' + go_id + '\n')
-        f.write(report + '\n')
 
 
 if __name__ == '__main__':
