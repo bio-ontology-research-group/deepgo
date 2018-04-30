@@ -67,8 +67,16 @@ def load_data():
 
 
 def load_rep_df():
-    df = pd.read_pickle('data/graph_new_embeddings.pkl')
+    df = pd.read_pickle('data/graph_new_embeddings_proteins.pkl')
     return df
+
+
+def load_embeds():
+    df = pd.read_pickle('data/graph_new_embeddings.pkl')
+    embeds = {}
+    for row in df.itertuples():
+        embeds[row.accessions] = row.embeddings
+    return embeds
 
 
 def load_org_df():
@@ -81,29 +89,21 @@ def run(*args, **kwargs):
     org_df = load_org_df()
     rep_df = load_rep_df()
     df = pd.merge(df, org_df, on='proteins', how='left')
-    df = pd.merge(df, rep_df, on='accessions', how='left')
-    p = Popen(['blastp', '-db', 'data/embeddings.fa',
-               '-max_target_seqs', '1', '-num_threads', '128',
-               '-outfmt', '6 qseqid sseqid'], stdin=PIPE, stdout=PIPE)
-    for i, row in df.iterrows():
-        if not isinstance(row['embeddings'], np.ndarray):
-            p.stdin.write(('>' + row['accessions'] + '\n' + row['sequences'] + '\n').encode('utf-8'))
-    p.stdin.close()
-    
-    prot_ids = {}
-    if p.wait() == 0:
-        for line in p.stdout:
-            print(line)
+    df = pd.merge(df, rep_df, on='proteins', how='left')
+    embeds = load_embeds()
+    mapping = {}
+    with open(DATA_ROOT + 'noembed.map') as f:
+        for line in f:
             it = line.strip().split('\t')
-            prot_ids[it[0]] = it[1]
-    prots = rep_df[rep_df['accessions'].isin(set(prot_ids.values()))]
-    embeds_dict = {}
-    for i, row in prots.iterrows():
-        embeds_dict[row['accessions']] = row['embeddings']
-
+            mapping[it[0]] = embeds[it[1]]
+    f = open(DATA_ROOT + 'noembed.fasta', 'w')
     for i, row in df.iterrows():
         if not isinstance(row['embeddings'], np.ndarray):
-            df.at[i, 'embeddings'] = embeds_dict[row['accessions']]
+            prot_id = row['proteins']
+            if prot_id in mapping:
+                df.at[i, 'embeddings'] = mapping[prot_id]
+            else:
+                f.write(('>' + prot_id + '\n' + row['sequences'] + '\n'))
 
     #df = df[df['orgs'] == '10090']
     print(len(df))

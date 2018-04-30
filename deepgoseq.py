@@ -70,13 +70,16 @@ class DFGenerator(object):
                 self.start, min(self.size, self.start + self.batch_size))
             df = self.df.iloc[batch_index]
             data = np.zeros((len(df), MAXLEN), dtype=np.int32)
+            data_rev = np.zeros((len(df), MAXLEN), dtype=np.int32)
             labels = np.zeros((len(df), nb_classes), dtype=np.int32)
             for i, row in enumerate(df.itertuples()):
                 data[i, 0:len(row.ngrams)] = row.ngrams
+                data_rev[i, 0:len(row.ngrams)] = np.flip(row.ngrams, axis=0)
                 for go_id in row.functions:
                     if go_id in go_indexes:
                         labels[i, go_indexes[go_id]] = 1
             self.start += self.batch_size
+            # data = [data, data_rev]
             return (data, labels)
         else:
             self.reset()
@@ -156,7 +159,7 @@ def load_data(org):
 
 
 def get_feature_model():
-    embedding_dims = 128
+    embedding_dims = 128 
     max_features = 8001
     model = Sequential()
     model.add(Embedding(
@@ -165,11 +168,28 @@ def get_feature_model():
         input_length=MAXLEN))
     model.add(Conv1D(
         filters=128,
-        kernel_size=16,
+        kernel_size=7,
         padding='valid',
         dilation_rate=2,
         strides=1))
-    model.add(MaxPooling1D(pool_size=16, strides=4))
+    model.add(MaxPooling1D(pool_size=3))
+    model.add(Dropout(0.3))
+    model.add(Conv1D(
+        filters=64,
+        kernel_size=7,
+        padding='valid',
+        dilation_rate=2,
+        strides=1))
+    model.add(MaxPooling1D(pool_size=3))
+    model.add(Dropout(0.3))
+    model.add(Conv1D(
+        filters=64,
+        kernel_size=7,
+        padding='valid',
+        dilation_rate=2,
+        strides=1))
+    model.add(MaxPooling1D(pool_size=3))
+    
     model.add(Flatten())
     return model
 
@@ -234,15 +254,19 @@ def get_layers(inputs):
 def get_model():
     logging.info("Building the model")
     input_seq = Input(shape=(MAXLEN,), dtype='int32', name='seq')
-    net = get_feature_model()(input_seq)
-    net = Dense(256)(net)
-    layers = get_layers(net)
-    output_models = []
-    for i in range(len(functions)):
-        output_models.append(layers[functions[i]]['output'])
-    net = concatenate(output_models, axis=1)
+    # input_rev = Input(shape=(MAXLEN,), dtype='int32', name='rev')
+    seq = get_feature_model()(input_seq)
+    # rev = get_feature_model()(input_rev)
+    net = seq
+    # net = concatenate([seq, rev], axis=1)
+    # net = Dense(512)(net)
+    # layers = get_layers(net)
+    # output_models = []
+    # for i in range(len(functions)):
+    #     output_models.append(layers[functions[i]]['output'])
+    # net = concatenate(output_models, axis=1)
     # net = Dense(1024, activation='relu')(merged)
-    # net = Dense(nb_classes, activation='sigmoid')(net)
+    net = Dense(nb_classes, activation='sigmoid')(net)
     # encoder = load_model('model_encoder.h5')
     # inputs = encoder.inputs
     # features = encoder.layers[1](inputs)
@@ -252,7 +276,7 @@ def get_model():
     # model = Model(encoder.layers[0].output, net)
     
     model = Model(input_seq, net)
-    model.load_weights('data/latest/model-pre.h5')
+    # model.load_weights('data/latest/model-pre.h5')
     logging.info('Compiling the model')
     optimizer = RMSprop()
     model.compile(
