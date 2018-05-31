@@ -37,11 +37,22 @@ def main():
         for line in f:
             it = line.strip().split('\t')
             sequences.append(it[1])
+
+    interpros = list()
+    with open(DATA_ROOT + 'interpros.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            if len(it) > 1:
+                interpros.append(it[1:])
+            else:
+                interpros.append([])
+    
     df = pd.DataFrame({
         'proteins': proteins,
         'accessions': accessions,
         'sequences': sequences,
-        'functions': functions})
+        'functions': functions,
+        'interpros': interpros})
     df.to_pickle(DATA_ROOT + 'swissprot_exp.pkl')
     print(df)
         

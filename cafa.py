@@ -47,7 +47,7 @@ def read_fasta(filename):
 
 def get_annotations():
     w = open('data/latest/annots.tab', 'w')
-    with gz.open('data/latest/uniprot_sprot.dat.gz', 'r') as f:
+    with gz.open('data/latest/uniprot_sprot.dat.gz', 'rt') as f:
         prot_id = ''
         prot_ac = ''
         annots = list()
@@ -78,6 +78,40 @@ def get_annotations():
             w.write('\n')
         w.close()
 
+def get_interpros():
+    prots = set()
+    with open('data/latest/annots.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            prots.add(it[0])
+    w = open('data/latest/interpros.tab', 'w')
+    with gz.open('data/latest/uniprot_sprot.dat.gz', 'rt') as f:
+        prot_id = ''
+        annots = list()
+        for line in f:
+            items = line.strip().split('   ')
+            if items[0] == 'ID' and len(items) > 1:
+                if prot_id != '' and prot_id in prots:
+                    w.write(prot_id)
+                    for ipro_id in annots:
+                        w.write('\t' + ipro_id)
+                    w.write('\n')
+                prot_id = items[1]
+                annots = list()
+            elif items[0] == 'DR' and len(items) > 1:
+                if prot_id not in prots:
+                    continue
+                items = items[1].split('; ')
+                if items[0] == 'InterPro':
+                    ipro_id = items[1]
+                    annots.append(ipro_id)
+        if prot_id in prots:
+            w.write(prot_id)
+            for ipro_id in annots:
+                w.write('\t' + ipro_id)
+            w.write('\n')
+        w.close()
+
 
 def get_sequences():
     prots = set()
@@ -86,7 +120,7 @@ def get_sequences():
             it = line.strip().split('\t')
             prots.add(it[0])
     w = open('data/latest/sequences.tab', 'w')
-    with gz.open('data/latest/uniprot_sprot.dat.gz', 'r') as f:
+    with gz.open('data/latest/uniprot_sprot.dat.gz', 'rt') as f:
         prot_id = ''
         for line in f:
             items = line.strip().split('   ')
@@ -456,8 +490,9 @@ def main(*args, **kwargs):
     # cafa3()
     # fasta2tabs()
     # cafa2string()
-    get_annotations()
-    get_sequences()
+    # get_annotations()
+    # get_sequences()
+    get_interpros()
     # sprot2tabs()
 
 

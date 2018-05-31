@@ -35,6 +35,8 @@ from sklearn.metrics import roc_curve, auc, matthews_corrcoef
 from scipy.spatial import distance
 import math
 import string
+from capsulelayers import CapsuleLayer, PrimaryCap, Length, Mask
+
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -73,8 +75,12 @@ class DFGenerator(object):
             data_rev = np.zeros((len(df), MAXLEN), dtype=np.int32)
             labels = np.zeros((len(df), nb_classes), dtype=np.int32)
             for i, row in enumerate(df.itertuples()):
-                data[i, 0:len(row.ngrams)] = row.ngrams
-                data_rev[i, 0:len(row.ngrams)] = np.flip(row.ngrams, axis=0)
+                st = 0
+                if hasattr(row, 'starts'):
+                    st = row.starts
+                data[i, st:(st + len(row.ngrams))] = row.ngrams
+            
+                data_rev[i, st:(st + len(row.ngrams))] = np.flip(row.ngrams, axis=0)
                 for go_id in row.functions:
                     if go_id in go_indexes:
                         labels[i, go_indexes[go_id]] = 1
@@ -140,6 +146,7 @@ def load_data(org):
     df = pd.read_pickle(DATA_ROOT + 'data.pkl')
     n = len(df)
     index = np.arange(n)
+    np.random.seed(seed=27)
     train_n = int(n * 0.8)
     valid_n = int(train_n * 0.8)
     train_df = df.iloc[index[:valid_n]]
@@ -154,44 +161,50 @@ def load_data(org):
     # org_df = pd.read_pickle('data/prokaryotes.pkl')
     # orgs = org_df['orgs']
     # test_df = test_df[test_df['orgs'].isin(orgs)]
+    def augment(df):
+        functions = list()
+        ngrams = list()
+        embeddings = list()
+        starts = list()
+        for i, row in enumerate(df.itertuples()):
+            st = np.random.randint((MAXLEN - len(row.ngrams)), size=10)
+            for s in st:
+                functions.append(row.functions)
+                ngrams.append(row.ngrams)
+                embeddings.append(row.embeddings)
+                starts.append(s)
+        df = pd.DataFrame({
+            'functions': functions, 'ngrams': ngrams,
+            'embeddings': embeddings, 'starts': starts})
+        index = np.arange(len(df))
+        np.random.seed(seed=10)
+        np.random.shuffle(index)
+        return df.iloc[index]
 
-    return train_df, valid_df, test_df
+    return augment(train_df), valid_df, test_df
 
 
-def get_feature_model():
-    embedding_dims = 128 
+def get_feature_net(seq):
+    embedding_dims = 32 
     max_features = 8001
-    model = Sequential()
-    model.add(Embedding(
+    embed = Embedding(
         max_features,
         embedding_dims,
-        input_length=MAXLEN))
-    model.add(Conv1D(
-        filters=128,
-        kernel_size=7,
+        input_length=MAXLEN)(seq)
+    net = embed
+    net = Conv1D(
+        filters=2,
+        kernel_size=11,
         padding='valid',
-        dilation_rate=2,
-        strides=1))
-    model.add(MaxPooling1D(pool_size=3))
-    model.add(Dropout(0.3))
-    model.add(Conv1D(
-        filters=64,
-        kernel_size=7,
-        padding='valid',
-        dilation_rate=2,
-        strides=1))
-    model.add(MaxPooling1D(pool_size=3))
-    model.add(Dropout(0.3))
-    model.add(Conv1D(
-        filters=64,
-        kernel_size=7,
-        padding='valid',
-        dilation_rate=2,
-        strides=1))
-    model.add(MaxPooling1D(pool_size=3))
-    
-    model.add(Flatten())
-    return model
+        activation='relu',
+        strides=1)(net)
+    primarycaps = PrimaryCap(net, dim_capsule=2, kernel_size=9, strides=2, padding='valid')
+
+    # Layer 3: Capsule layer. Routing algorithm works here.
+    digitcaps = CapsuleLayer(num_capsule=nb_classes, dim_capsule=2, routings=3,
+                             name='digitcaps')(primarycaps)
+    net = Flatten()(digitcaps)
+    return net
 
 
 def get_node_name(go_id):
@@ -255,7 +268,7 @@ def get_model():
     logging.info("Building the model")
     input_seq = Input(shape=(MAXLEN,), dtype='int32', name='seq')
     # input_rev = Input(shape=(MAXLEN,), dtype='int32', name='rev')
-    seq = get_feature_model()(input_seq)
+    seq = get_feature_net(input_seq)
     # rev = get_feature_model()(input_rev)
     net = seq
     # net = concatenate([seq, rev], axis=1)
@@ -266,6 +279,9 @@ def get_model():
     #     output_models.append(layers[functions[i]]['output'])
     # net = concatenate(output_models, axis=1)
     # net = Dense(1024, activation='relu')(merged)
+    # net = Dropout(0.5)(net)
+    # net = Dense(2000, activation='relu')(net)
+    # net = Dense(1000, activation='relu')(net)
     net = Dense(nb_classes, activation='sigmoid')(net)
     # encoder = load_model('model_encoder.h5')
     # inputs = encoder.inputs
@@ -276,12 +292,12 @@ def get_model():
     # model = Model(encoder.layers[0].output, net)
     
     model = Model(input_seq, net)
+    model.summary()
     # model.load_weights('data/latest/model-pre.h5')
     logging.info('Compiling the model')
-    optimizer = RMSprop()
     model.compile(
-        optimizer=optimizer,
-        loss='binary_crossentropy')
+        optimizer='adam',
+        loss='mse')
     logging.info('Compilation finished')
     return model
 
@@ -332,12 +348,12 @@ def test_model(test_df, model_file, batch_size):
     generator.fit(test_df)
     steps = int(math.ceil(len(test_df) / batch_size))
 
-    logging.info('Loading the model')
+    logging.info('Loading the model ' + model_file)
     model_json = open(model_file + '.json').read()
     model = model_from_json(model_json)
     model.load_weights(model_file + '.h5')
     logging.info('Compiling model')
-    model.compile(optimizer='rmsprop', loss='binary_crossentropy')
+    model.compile(optimizer='rmsprop', loss='mse')
     logging.info('Evaluating model')
     loss = model.evaluate_generator(generator, steps=steps)
     logging.info('Test loss %f' % loss)

@@ -73,7 +73,10 @@ class DFGenerator(object):
             data_net = np.zeros((len(df), 256), dtype=np.float32)
             labels = np.zeros((len(df), nb_classes), dtype=np.int32)
             for i, row in enumerate(df.itertuples()):
-                data_seq[i, 0:len(row.ngrams)] = row.ngrams
+                st = 0
+                if hasattr(row, 'starts'):
+                    st = row.starts
+                data_seq[i, st:(st + len(row.ngrams))] = row.ngrams
                 if isinstance(row.embeddings, np.ndarray):
                     data_net[i, :] = row.embeddings
                 for go_id in row.functions:
@@ -155,12 +158,31 @@ def load_data(org):
     # org_df = pd.read_pickle('data/prokaryotes.pkl')
     # orgs = org_df['orgs']
     # test_df = test_df[test_df['orgs'].isin(orgs)]
+    def augment(df):
+        functions = list()
+        ngrams = list()
+        embeddings = list()
+        starts = list()
+        for i, row in enumerate(df.itertuples()):
+            st = np.random.randint((MAXLEN - len(row.ngrams)), size=10)
+            for s in st:
+                functions.append(row.functions)
+                ngrams.append(row.ngrams)
+                embeddings.append(row.embeddings)
+                starts.append(s)
+        df = pd.DataFrame({
+            'functions': functions, 'ngrams': ngrams,
+            'embeddings': embeddings, 'starts': starts})
+        index = np.arange(len(df))
+        np.random.seed(seed=10)
+        np.random.shuffle(index)
+        return df.iloc[index]
 
-    return train_df, valid_df, test_df
+    return augment(train_df), valid_df, test_df
 
 
 def get_feature_model():
-    embedding_dims = 128
+    embedding_dims = 32
     max_features = 8001
     model = Sequential()
     model.add(Embedding(
@@ -168,35 +190,34 @@ def get_feature_model():
         embedding_dims,
         input_length=MAXLEN))
     model.add(Conv1D(
-        filters=128,
-        kernel_size=7,
+        filters=1,
+        kernel_size=3,
         padding='valid',
-        dilation_rate=2,
         strides=1))
-    model.add(MaxPooling1D(pool_size=3))
+    model.add(MaxPooling1D(pool_size=2))
     # model.add(Dropout(0.3))
-    model.add(Conv1D(
-        filters=64,
-        kernel_size=7,
-        padding='valid',
-        dilation_rate=2,
-        strides=1))
-    model.add(MaxPooling1D(pool_size=3))
-    # model.add(Dropout(0.3))
-    model.add(Conv1D(
-        filters=64,
-        kernel_size=7,
-        padding='valid',
-        dilation_rate=2,
-        strides=1))
-    model.add(MaxPooling1D(pool_size=3))
-    model.add(Conv1D(
-        filters=64,
-        kernel_size=7,
-        padding='valid',
-        dilation_rate=2,
-        strides=1))
-    model.add(MaxPooling1D(pool_size=3))
+    # model.add(Conv1D(
+    #     filters=64,
+    #     kernel_size=7,
+    #     padding='valid',
+    #     dilation_rate=2,
+    #     strides=1))
+    # model.add(MaxPooling1D(pool_size=3))
+    # # model.add(Dropout(0.3))
+    # model.add(Conv1D(
+    #     filters=64,
+    #     kernel_size=7,
+    #     padding='valid',
+    #     dilation_rate=2,
+    #     strides=1))
+    # model.add(MaxPooling1D(pool_size=3))
+    # model.add(Conv1D(
+    #     filters=64,
+    #     kernel_size=7,
+    #     padding='valid',
+    #     dilation_rate=2,
+    #     strides=1))
+    # model.add(MaxPooling1D(pool_size=3))
     model.add(Flatten())
     return model
 
