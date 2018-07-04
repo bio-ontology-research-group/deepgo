@@ -8,37 +8,23 @@ from utils import (
     get_anchestors,
     FUNC_DICT,
     EXP_CODES)
-from aaindex import is_ok
+from aaindex import is_ok, AAINDEX
 import click as ck
+from subprocess import Popen, PIPE
 
-DATA_ROOT = 'data/all/'
-
+DATA_ROOT = 'data/binary/'
+MAXLEN = 2000
 
 @ck.command()
-@ck.option(
-    '--split',
-    default=0.8,
-    help='Train test split')
-def main(split):
-    global SPLIT
-    SPLIT = split
-    global GO_IDS
-    GO_IDS = FUNC_DICT.values()
+def main():
     global go
-    go = get_gene_ontology('go.obo')
-    func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
+    go = get_gene_ontology(DATA_ROOT + 'go.obo', with_rels=True)
+    func_df = pd.read_pickle(DATA_ROOT + 'functions.pkl')
     global functions
     functions = func_df['functions'].values
-    func_df = pd.read_pickle(DATA_ROOT + 'mf.pkl')
-    functions = np.concatenate((functions, func_df['functions'].values))
-    func_df = pd.read_pickle(DATA_ROOT + 'cc.pkl')
-    functions = np.concatenate((functions, func_df['functions'].values))
     global func_set
-    func_set = (
-        get_go_set(go, GO_IDS[0])
-        | get_go_set(go, GO_IDS[1])
-        | get_go_set(go, GO_IDS[2]))
-    print len(functions)
+    func_set = set(functions)
+    print(len(functions))
     global go_indexes
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
@@ -54,95 +40,104 @@ def load_data():
     gram_len = len(ngram_df['ngrams'][0])
     print('Gram length:', gram_len)
     print('Vocabulary size:', len(vocab))
-    proteins = list()
-    gos = list()
-    labels = list()
     ngrams = list()
-    sequences = list()
-    accessions = list()
     df = pd.read_pickle(DATA_ROOT + 'swissprot_exp.pkl')
     # Filtering data by sequences
     index = list()
     for i, row in df.iterrows():
-        if is_ok(row['sequences']):
+        seq = row['sequences']
+        if is_ok(seq) and len(seq) <= MAXLEN:
             index.append(i)
     df = df.loc[index]
 
     for i, row in df.iterrows():
-        go_list = []
-        for item in row['annots']:
-            items = item.split('|')
-            if items[1] in EXP_CODES:
-                go_list.append(items[0])
-            # go_list.append(items[0])
-        go_set = set()
-        for go_id in go_list:
-            if go_id in func_set:
-                go_set |= get_anchestors(go, go_id)
-        if not go_set:
-            continue
-        for g_id in GO_IDS:
-            go_set.discard(g_id)
-        gos.append(go_list)
-        proteins.append(row['proteins'])
-        accessions.append(row['accessions'])
         seq = row['sequences']
-        sequences.append(seq)
         grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
-        for i in xrange(len(seq) - gram_len + 1):
+        for i in range(len(seq) - gram_len + 1):
             grams[i] = vocab[seq[i: (i + gram_len)]]
         ngrams.append(grams)
-        label = np.zeros((len(functions),), dtype='int32')
-        for go_id in go_set:
-            if go_id in go_indexes:
-                label[go_indexes[go_id]] = 1
-        labels.append(label)
     res_df = pd.DataFrame({
-        'accessions': accessions,
-        'proteins': proteins,
+        'accessions': df['accessions'],
+        'proteins': df['proteins'],
         'ngrams': ngrams,
-        'labels': labels,
-        'gos': gos,
-        'sequences': sequences})
+        'functions': df['functions'],
+        'sequences': df['sequences']})
     print(len(res_df))
     return res_df
 
 
 def load_rep_df():
-    df = pd.read_pickle('data/graph_new_embeddings.pkl')
+    df = pd.read_pickle('data/graph_new_embeddings_proteins.pkl')
     return df
+
+
+def load_embeds():
+    df = pd.read_pickle('data/graph_new_embeddings.pkl')
+    embeds = {}
+    for row in df.itertuples():
+        embeds[row.accessions] = row.embeddings
+    return embeds
 
 
 def load_org_df():
     df = pd.read_pickle('data/protein_orgs.pkl')
     return df
 
+def load_interpros():
+    proteins = list()
+    interpros = list()
+    with open('data/latest/interpros.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            if len(it) > 1:
+                proteins.append(it[0])
+                interpros.append(it[1:])
+    df = pd.DataFrame({'proteins': proteins, 'interpros': interpros})
+    return df
 
 def run(*args, **kwargs):
     df = load_data()
     org_df = load_org_df()
     rep_df = load_rep_df()
+    ipro_df = load_interpros()
     df = pd.merge(df, org_df, on='proteins', how='left')
-    df = pd.merge(df, rep_df, on='accessions', how='left')
-    missing_rep = 0
+    df = pd.merge(df, rep_df, on='proteins', how='left')
+    df = pd.merge(df, ipro_df, on='proteins', how='left')
+    embeds = load_embeds()
+    mapping = {}
+    with open(DATA_ROOT + 'noembed.map') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            mapping[it[0]] = embeds[it[1]]
+    f = open(DATA_ROOT + 'noembed.fasta', 'w')
     for i, row in df.iterrows():
         if not isinstance(row['embeddings'], np.ndarray):
-            row['embeddings'] = np.zeros((256,), dtype='float32')
-            missing_rep += 1
-    print('Missing network reps:', missing_rep)
-    index = df.index.values
-    np.random.seed(seed=0)
-    np.random.shuffle(index)
-    train_n = int(len(df) * SPLIT)
-    train_df = df.loc[index[:train_n]]
-    test_df = df.loc[index[train_n:]]
-    # prots_df = pd.read_pickle('data/swiss/clusters.pkl')
-    # train_df = df[df['proteins'].isin(prots_df['proteins'])]
-    # test_df = df[~df['proteins'].isin(prots_df['proteins'])]
-    print(len(train_df), len(test_df))
-    train_df.to_pickle(DATA_ROOT + 'train.pkl')
-    test_df.to_pickle(DATA_ROOT + 'test.pkl')
+            prot_id = row['proteins']
+            if prot_id in mapping:
+                df.at[i, 'embeddings'] = mapping[prot_id]
+            else:
+                f.write(('>' + prot_id + '\n' + row['sequences'] + '\n'))
 
+    #df = df[df['orgs'] == '10090']
+    print(len(df))
+    df.to_pickle(DATA_ROOT + 'data.pkl')
+    func_df = pd.read_pickle(DATA_ROOT + 'functions.pkl')
+    functions = func_df['functions']
+    for go_id in functions:
+        positives = list()
+        negatives = list()
+        for i, row in df.iterrows():
+            if go_id in row['functions']:
+                positives.append(i)
+            else:
+                negatives.append(i)
+        np.random.shuffle(negatives)
+        negatives = negatives[:len(positives)]
+        index = positives + negatives
+        np.random.shuffle(index)
+        dt = df.loc[index]
+        dt.to_pickle(DATA_ROOT + go_id.replace(':', '_') + '.pkl')
+        print(go_id, len(dt))
 
 if __name__ == '__main__':
     main()

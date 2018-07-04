@@ -83,13 +83,26 @@ def load_org_df():
     df = pd.read_pickle('data/protein_orgs.pkl')
     return df
 
+def load_interpros():
+    proteins = list()
+    interpros = list()
+    with open('data/latest/interpros.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            if len(it) > 1:
+                proteins.append(it[0])
+                interpros.append(it[1:])
+    df = pd.DataFrame({'proteins': proteins, 'interpros': interpros})
+    return df
 
 def run(*args, **kwargs):
     df = load_data()
     org_df = load_org_df()
     rep_df = load_rep_df()
+    ipro_df = load_interpros()
     df = pd.merge(df, org_df, on='proteins', how='left')
     df = pd.merge(df, rep_df, on='proteins', how='left')
+    df = pd.merge(df, ipro_df, on='proteins', how='left')
     embeds = load_embeds()
     mapping = {}
     with open(DATA_ROOT + 'noembed.map') as f:

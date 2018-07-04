@@ -72,7 +72,7 @@ class DFGenerator(object):
                 self.start, min(self.size, self.start + self.batch_size))
             df = self.df.iloc[batch_index]
             data = np.zeros((len(df), MAXLEN), dtype=np.int32)
-            data_rev = np.zeros((len(df), MAXLEN), dtype=np.int32)
+            ipros = np.zeros((len(df), len(interpros)), dtype=np.float32)
             labels = np.zeros((len(df), nb_classes), dtype=np.int32)
             for i, row in enumerate(df.itertuples()):
                 st = 0
@@ -80,12 +80,15 @@ class DFGenerator(object):
                     st = row.starts
                 data[i, st:(st + len(row.ngrams))] = row.ngrams
             
-                data_rev[i, st:(st + len(row.ngrams))] = np.flip(row.ngrams, axis=0)
                 for go_id in row.functions:
                     if go_id in go_indexes:
                         labels[i, go_indexes[go_id]] = 1
+                if isinstance(row.interpros, list):
+                    for ipro_id in row.interpros:
+                        if ipro_id in go_indexes:
+                            ipros[i, ipro_indexes[ipro_id]] = 1
             self.start += self.batch_size
-            # data = [data, data_rev]
+            # data = ipros
             return (data, labels)
         else:
             self.reset()
@@ -135,6 +138,16 @@ def main(device, org, model_file, is_train, batch_size, epochs):
     names = {}
     global digits
     digits = string.digits + string.ascii_letters
+
+    global ipro_indexes
+    ipro_indexes = {}
+    global interpros
+    interpros = list()
+    with open(DATA_ROOT + 'interpros.list') as f:
+        for i in range(10000):
+            it = next(f).split('\t')
+            ipro_indexes[it[0]] = i
+            interpros.append(it[0])
     
     train_df, valid_df, test_df = load_data(org=org)
     with tf.device('/' + device):
@@ -181,29 +194,17 @@ def load_data(org):
         np.random.shuffle(index)
         return df.iloc[index]
 
-    return augment(train_df), valid_df, test_df
+    return train_df, valid_df, test_df
 
 
 def get_feature_net(seq):
-    embedding_dims = 32 
+    embedding_dims = 4 
     max_features = 8001
     embed = Embedding(
         max_features,
         embedding_dims,
         input_length=MAXLEN)(seq)
     net = embed
-    net = Conv1D(
-        filters=2,
-        kernel_size=11,
-        padding='valid',
-        activation='relu',
-        strides=1)(net)
-    primarycaps = PrimaryCap(net, dim_capsule=2, kernel_size=9, strides=2, padding='valid')
-
-    # Layer 3: Capsule layer. Routing algorithm works here.
-    digitcaps = CapsuleLayer(num_capsule=nb_classes, dim_capsule=2, routings=3,
-                             name='digitcaps')(primarycaps)
-    net = Flatten()(digitcaps)
     return net
 
 
@@ -224,7 +225,22 @@ def get_node_name(go_id):
 
 def get_function_node(name, inputs):
     # net = Dense(256, name=name, activation='relu')(inputs)
-    output = Dense(1, name=name, activation='sigmoid')(inputs)
+    embedding_dims = 4 
+    max_features = 8001
+    embed = Embedding(
+        max_features,
+        embedding_dims,
+        input_length=MAXLEN)(inputs)
+
+    net = Conv1D(
+        filters=2,
+        kernel_size=11,
+        padding='valid',
+        activation='relu',
+        strides=1,
+        name=(name + '_c'))(embed)
+    net = Flatten()(net)
+    output = Dense(1, name=name, activation='sigmoid')(net)
     return output, output
 
 
@@ -267,22 +283,25 @@ def get_layers(inputs):
 def get_model():
     logging.info("Building the model")
     input_seq = Input(shape=(MAXLEN,), dtype='int32', name='seq')
+    input_ipros = Input(shape=(len(interpros),), dtype='float32', name='ipros')
     # input_rev = Input(shape=(MAXLEN,), dtype='int32', name='rev')
-    seq = get_feature_net(input_seq)
+    # net = get_feature_net(input_seq)
     # rev = get_feature_model()(input_rev)
-    net = seq
-    # net = concatenate([seq, rev], axis=1)
+    # net = input_ipros
+    # net = concatenate([seq, input_ipros], axis=1)
     # net = Dense(512)(net)
     # layers = get_layers(net)
-    # output_models = []
-    # for i in range(len(functions)):
-    #     output_models.append(layers[functions[i]]['output'])
-    # net = concatenate(output_models, axis=1)
+    output_models = []
+    for i in range(len(functions)):
+        out, output = get_function_node(get_node_name(functions[i]), input_seq)
+        output_models.append(output) 
+        # output_models.append(layers[functions[i]]['output'])
+    net = concatenate(output_models, axis=1)
     # net = Dense(1024, activation='relu')(merged)
     # net = Dropout(0.5)(net)
     # net = Dense(2000, activation='relu')(net)
     # net = Dense(1000, activation='relu')(net)
-    net = Dense(nb_classes, activation='sigmoid')(net)
+    # net = Dense(nb_classes, activation='sigmoid')(net)
     # encoder = load_model('model_encoder.h5')
     # inputs = encoder.inputs
     # features = encoder.layers[1](inputs)
@@ -296,8 +315,8 @@ def get_model():
     # model.load_weights('data/latest/model-pre.h5')
     logging.info('Compiling the model')
     model.compile(
-        optimizer='adam',
-        loss='mse')
+        optimizer='rmsprop',
+        loss='binary_crossentropy')
     logging.info('Compilation finished')
     return model
 
@@ -353,7 +372,7 @@ def test_model(test_df, model_file, batch_size):
     model = model_from_json(model_json)
     model.load_weights(model_file + '.h5')
     logging.info('Compiling model')
-    model.compile(optimizer='rmsprop', loss='mse')
+    model.compile(optimizer='rmsprop', loss='binary_crossentropy')
     logging.info('Evaluating model')
     loss = model.evaluate_generator(generator, steps=steps)
     logging.info('Test loss %f' % loss)
