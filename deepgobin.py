@@ -289,7 +289,7 @@ def train_model(train_df, valid_df, model_file, batch_size, epochs):
     checkpointer = ModelCheckpoint(
         filepath=model_file + '.h5',
         verbose=1, save_best_only=True)
-    earlystopper = EarlyStopping(monitor='val_loss', patience=16, verbose=1)
+    earlystopper = EarlyStopping(monitor='val_loss', patience=1, verbose=1)
     logger = CSVLogger(model_file + '.csv')
 
     logging.info('Starting training the model')
