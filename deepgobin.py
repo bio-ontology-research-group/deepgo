@@ -168,15 +168,14 @@ def main(device, org, model_file, is_train, batch_size, epochs, go_id):
         test_model(test_df, model_file, batch_size)
 
 def load_data(org):
-    df = pd.read_pickle(DATA_ROOT + function.replace(':', '_') + '.pkl')
-    n = len(df)
+    train_df = pd.read_pickle(DATA_ROOT + function.replace(':', '_') + '_train.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + function.replace(':', '_') + '_test.pkl')
+    n = len(train_df)
     index = np.arange(n)
     np.random.seed(seed=0)
     train_n = int(n * 0.8)
-    valid_n = int(train_n * 0.8)
-    train_df = df.iloc[index[:valid_n]]
-    valid_df = df.iloc[index[valid_n:train_n]]
-    test_df = df.iloc[index[train_n:]]
+    train_df = df.iloc[index[:train_n]]
+    valid_df = df.iloc[index[train_n:]]
     if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == org]

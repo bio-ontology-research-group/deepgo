@@ -96,37 +96,43 @@ def load_interpros():
     return df
 
 def run(*args, **kwargs):
-    df = load_data()
-    org_df = load_org_df()
-    rep_df = load_rep_df()
-    ipro_df = load_interpros()
-    df = pd.merge(df, org_df, on='proteins', how='left')
-    df = pd.merge(df, rep_df, on='proteins', how='left')
-    df = pd.merge(df, ipro_df, on='proteins', how='left')
-    embeds = load_embeds()
-    mapping = {}
-    with open(DATA_ROOT + 'noembed.map') as f:
-        for line in f:
-            it = line.strip().split('\t')
-            mapping[it[0]] = embeds[it[1]]
-    f = open(DATA_ROOT + 'noembed.fasta', 'w')
-    for i, row in df.iterrows():
-        if not isinstance(row['embeddings'], np.ndarray):
-            prot_id = row['proteins']
-            if prot_id in mapping:
-                df.at[i, 'embeddings'] = mapping[prot_id]
-            else:
-                f.write(('>' + prot_id + '\n' + row['sequences'] + '\n'))
+    # df = load_data()
+    # org_df = load_org_df()
+    # rep_df = load_rep_df()
+    # ipro_df = load_interpros()
+    # df = pd.merge(df, org_df, on='proteins', how='left')
+    # df = pd.merge(df, rep_df, on='proteins', how='left')
+    # df = pd.merge(df, ipro_df, on='proteins', how='left')
+    # embeds = load_embeds()
+    # mapping = {}
+    # with open(DATA_ROOT + 'noembed.map') as f:
+    #     for line in f:
+    #         it = line.strip().split('\t')
+    #         mapping[it[0]] = embeds[it[1]]
+    # f = open(DATA_ROOT + 'noembed.fasta', 'w')
+    # for i, row in df.iterrows():
+    #     if not isinstance(row['embeddings'], np.ndarray):
+    #         prot_id = row['proteins']
+    #         if prot_id in mapping:
+    #             df.at[i, 'embeddings'] = mapping[prot_id]
+    #         else:
+    #             f.write(('>' + prot_id + '\n' + row['sequences'] + '\n'))
 
-    #df = df[df['orgs'] == '10090']
-    print(len(df))
-    df.to_pickle(DATA_ROOT + 'data.pkl')
+    # #df = df[df['orgs'] == '10090']
+    # print(len(df))
+    df = pd.read_pickle(DATA_ROOT + 'data.pkl')
+    index = np.arange(len(df))
+    train_n = int(len(df) * 0.8)
+    train_df = df.iloc[index[:train_n]]
+    train_df.to_pickle(DATA_ROOT + 'train.pkl')
+    test_df = df.iloc[index[train_n:]]
+    test_df.to_pickle(DATA_ROOT + 'test.pkl')
     func_df = pd.read_pickle(DATA_ROOT + 'functions.pkl')
     functions = func_df['functions']
     for go_id in functions:
         positives = list()
         negatives = list()
-        for i, row in df.iterrows():
+        for i, row in train_df.iterrows():
             if go_id in row['functions']:
                 positives.append(i)
             else:
@@ -135,9 +141,25 @@ def run(*args, **kwargs):
         negatives = negatives[:len(positives)]
         index = positives + negatives
         np.random.shuffle(index)
-        dt = df.loc[index]
-        dt.to_pickle(DATA_ROOT + go_id.replace(':', '_') + '.pkl')
-        print(go_id, len(dt))
+        dt = train_df.loc[index]
+        dt.to_pickle(DATA_ROOT + go_id.replace(':', '_') + '_train.pkl')
+        print('train', go_id, len(dt))
+
+        positives = list()
+        negatives = list()
+        for i, row in test_df.iterrows():
+            if go_id in row['functions']:
+                positives.append(i)
+            else:
+                negatives.append(i)
+        np.random.shuffle(negatives)
+        negatives = negatives[:len(positives)]
+        index = positives + negatives
+        np.random.shuffle(index)
+        dt = test_df.loc[index]
+        dt.to_pickle(DATA_ROOT + go_id.replace(':', '_') + '_test.pkl')
+        print('test', go_id, len(dt))
+
 
 if __name__ == '__main__':
     main()

@@ -7,7 +7,7 @@ python nn_hierarchical_network.py
 import numpy as np
 import pandas as pd
 import click as ck
-from keras.models import Sequential, Model, model_from_json
+from keras.models import Sequential, Model, model_from_json, load_model
 from keras.layers import (
     Dense, Dropout, Activation, Input,
     Flatten, Highway, BatchNormalization)
@@ -35,6 +35,7 @@ from sklearn.metrics import roc_curve, auc, matthews_corrcoef
 from scipy.spatial import distance
 import math
 import string
+import os
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -178,7 +179,7 @@ def load_data(org):
         np.random.shuffle(index)
         return df.iloc[index]
 
-    return augment(train_df), valid_df, test_df
+    return train_df, valid_df, test_df
 
 
 def get_feature_model():
@@ -237,10 +238,39 @@ def get_node_name(go_id):
     # return name
 
 
-def get_function_node(name, inputs):
-    # net = Dense(256, name=name, activation='relu')(inputs)
-    output = Dense(1, name=name, activation='sigmoid')(inputs)
-    return output, output
+def get_function_node(name, inputs, embed):
+    model_file = 'data/binary/model_GO_' + name + '.h5'
+    if os.path.exists(model_file):
+        model = load_model(model_file)
+        print(name, model.input)
+        
+        net = model([inputs, embed])
+        return net
+    else:
+        embedding_dims = 48
+        max_features = 8001
+        net = Embedding(
+            max_features,
+            embedding_dims,
+            input_length=MAXLEN,
+            name=(name + '_e'))(inputs)
+        net = Conv1D(
+            filters=128,
+            kernel_size=15,
+            padding='valid',
+            strides=1,
+            name=(name + '_c0'))(net)
+        net = Conv1D(
+            filters=16,
+            kernel_size=15,
+            padding='valid',
+            strides=1,
+            name=(name + '_c1'))(net)
+
+        net = Flatten()(net)
+        net = concatenate([net, embed], axis=1)
+        net = Dense(1, name=name, activation='sigmoid')(net)
+        return net
 
 
 def get_layers(inputs):
@@ -282,16 +312,23 @@ def get_layers(inputs):
 def get_model():
     logging.info("Building the model")
     input_seq = Input(shape=(MAXLEN,), dtype='int32', name='seq')
-    input_net = Input(shape=(256,), dtype='float32', name='net')
-    net = get_feature_model()(input_seq)
-    net = concatenate([net, input_net], axis=1)
+    input_embed = Input(shape=(256,), dtype='float32', name='net')
+    # net = get_feature_model()(input_seq)
+    # net = concatenate([net, input_net], axis=1)
     # layers = get_layers(net)
-    # output_models = []
-    # for i in range(len(functions)):
-    #     output_models.append(layers[functions[i]]['output'])
-    # net = concatenate(output_models, axis=1)
+    output_models = []
+    for i in range(len(functions)):
+        name = get_node_name(functions[i])
+        print(i, functions[i])
+        model_file = 'data/binary/model_GO_' + name + '.h5'
+        if not os.path.exists(model_file):
+            print('No model found ', i, functions[i])
+        output_models.append(
+            get_function_node(
+                name, input_seq, input_embed))
+    net = concatenate(output_models, axis=1)
     # net = Dense(1024, activation='relu')(merged)
-    net = Dense(nb_classes, activation='sigmoid')(net)
+    # net = Dense(nb_classes, activation='sigmoid')(net)
     # encoder = load_model('model_encoder.h5')
     # inputs = encoder.inputs
     # features = encoder.layers[1](inputs)
@@ -300,7 +337,7 @@ def get_model():
     # net = Dense(nb_classes, activation='sigmoid')(features)
     # model = Model(encoder.layers[0].output, net)
     
-    model = Model([input_seq, input_net], net)
+    model = Model([input_seq, input_embed], net)
     # model.load_weights('data/latest/model-pre.h5')
     logging.info('Compiling the model')
     optimizer = RMSprop()
