@@ -174,8 +174,8 @@ def load_data(org):
     index = np.arange(n)
     np.random.seed(seed=0)
     train_n = int(n * 0.8)
-    train_df = df.iloc[index[:train_n]]
-    valid_df = df.iloc[index[train_n:]]
+    valid_df = train_df.iloc[index[train_n:]]
+    train_df = train_df.iloc[index[:train_n]]
     if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == org]
