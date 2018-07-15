@@ -89,10 +89,10 @@ class DFGenerator(object):
                     labels[i, 0] = 1
                 if isinstance(row.interpros, list):
                     for ipro_id in row.interpros:
-                        if ipro_id in go_indexes:
+                        if ipro_id in ipro_indexes:
                             ipros[i, ipro_indexes[ipro_id]] = 1
             self.start += self.batch_size
-            data = [data, embed]
+            data = [ipros, embed]
             # data = embed
             return (data, labels)
         else:
@@ -168,14 +168,17 @@ def main(device, org, model_file, is_train, batch_size, epochs, go_id):
         test_model(test_df, model_file, batch_size)
 
 def load_data(org):
-    train_df = pd.read_pickle(DATA_ROOT + function.replace(':', '_') + '_train.pkl')
-    test_df = pd.read_pickle(DATA_ROOT + function.replace(':', '_') + '_test.pkl')
-    n = len(train_df)
+    # train_df = pd.read_pickle(DATA_ROOT + function.replace(':', '_') + '_train.pkl')
+    # test_df = pd.read_pickle(DATA_ROOT + function.replace(':', '_') + '_test.pkl')
+    df = pd.read_pickle(DATA_ROOT + 'data.pkl')
+    n = len(df)
     index = np.arange(n)
     np.random.seed(seed=0)
     train_n = int(n * 0.8)
-    valid_df = train_df.iloc[index[train_n:]]
-    train_df = train_df.iloc[index[:train_n]]
+    valid_n = int(train_n * 0.8)
+    train_df = df.iloc[index[:valid_n]]
+    valid_df = df.iloc[index[valid_n:train_n]]
+    test_df = df.iloc[index[train_n:]]
     if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == org]
@@ -186,13 +189,22 @@ def load_data(org):
     # orgs = org_df['orgs']
     # test_df = test_df[test_df['orgs'].isin(orgs)]
     def augment(df):
+        pos_n = 0
+        for i, row in df.iterrows():
+            if function in row['functions']:
+                pos_n += 1
+        print(pos_n)
+        d = int((len(df) - pos_n) / pos_n)
         functions = list()
         ngrams = list()
         embeddings = list()
         interpros = list()
         starts = list()
         for i, row in enumerate(df.itertuples()):
-            st = np.random.randint((MAXLEN - len(row.ngrams)), size=20)
+            size = 1
+            if function in row.functions:
+                size *= d
+            st = np.random.randint((MAXLEN - len(row.ngrams)), size=size)
             for s in st:
                 functions.append(row.functions)
                 ngrams.append(row.ngrams)
@@ -207,7 +219,7 @@ def load_data(org):
         np.random.shuffle(index)
         return df.iloc[index]
 
-    return train_df, valid_df, test_df
+    return augment(train_df), valid_df, test_df
 
 
 def get_feature_net(seq):
@@ -236,30 +248,30 @@ def get_node_name(go_id):
     # return name
 
 
-def get_function_node(name, inputs, embed):
+def get_function_node(name, inputs, embed, ipros):
     # net = Dense(256, name=name, activation='relu')(inputs)
-    embedding_dims = 48
-    max_features = 8001
-    net = Embedding(
-        max_features,
-        embedding_dims,
-        input_length=MAXLEN,
-        name=(name + '_e'))(inputs)
-    net = Conv1D(
-        filters=128,
-        kernel_size=15,
-        padding='valid',
-        strides=1,
-        name=(name + '_c0'))(net)
-    net = Conv1D(
-        filters=16,
-        kernel_size=15,
-        padding='valid',
-        strides=1,
-        name=(name + '_c1'))(net)
+    # embedding_dims = 48
+    # max_features = 8001
+    # net = Embedding(
+    #     max_features,
+    #     embedding_dims,
+    #     input_length=MAXLEN,
+    #     name=(name + '_e'))(inputs)
+    # net = Conv1D(
+    #     filters=128,
+    #     kernel_size=15,
+    #     padding='valid',
+    #     strides=1,
+    #     name=(name + '_c0'))(net)
+    # net = Conv1D(
+    #     filters=16,
+    #     kernel_size=15,
+    #     padding='valid',
+    #     strides=1,
+    #     name=(name + '_c1'))(net)
     
-    net = Flatten()(net)
-    net = concatenate([net, embed], axis=1)
+    # net = Flatten()(net)
+    net = concatenate([ipros, embed], axis=1)
     net = Dense(1, name=name, activation='sigmoid')(net)
     return net
 
@@ -270,8 +282,8 @@ def get_model():
     input_seq = Input(shape=(MAXLEN,), dtype='int32', name='seq')
     input_embed = Input(shape=(256,), dtype='float32', name='embed')
     input_ipros = Input(shape=(len(interpros),), dtype='float32', name='ipros')
-    net = get_function_node(get_node_name(function), input_seq, input_embed)
-    model = Model([input_seq, input_embed], net)
+    net = get_function_node(get_node_name(function), input_seq, input_embed, input_ipros)
+    model = Model([input_ipros, input_embed], net)
     model.summary()
     logging.info('Compiling the model')
     model.compile(
@@ -313,7 +325,8 @@ def train_model(train_df, valid_df, model_file, batch_size, epochs):
         validation_steps=valid_steps,
         max_queue_size=batch_size,
         workers=12,
-        callbacks=[logger, checkpointer, earlystopper])
+        callbacks=[logger, checkpointer, earlystopper],
+        class_weight={0:1.,1:100})
 
     
 def test_model(test_df, model_file, batch_size):

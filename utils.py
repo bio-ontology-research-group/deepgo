@@ -83,8 +83,8 @@ def get_gene_ontology(filename='data/go.obo', with_rels=False):
                     obj['is_a'].append(l[1].split(' ! ')[0])
                 elif with_rels and l[0] == 'relationship':
                     it = l[1].split()
-                    if it[0] == 'part_of':
-                        obj['is_a'].append(it[1])
+                    # add all types of relationships
+                    obj['is_a'].append(it[1])
                 elif l[0] == 'name':
                     obj['name'] = l[1]
                 elif l[0] == 'is_obsolete' and l[1] == 'true':

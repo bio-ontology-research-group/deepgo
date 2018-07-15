@@ -46,7 +46,7 @@ K.set_session(sess)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 sys.setrecursionlimit(100000)
 
-DATA_ROOT = 'data/latest/'
+DATA_ROOT = 'data/binary/'
 MAXLEN = 2000
 
 class DFGenerator(object):
@@ -72,6 +72,7 @@ class DFGenerator(object):
             df = self.df.iloc[batch_index]
             data_seq = np.zeros((len(df), MAXLEN), dtype=np.int32)
             data_net = np.zeros((len(df), 256), dtype=np.float32)
+            ipros = np.zeros((len(df), len(interpros)), dtype=np.float32)
             labels = np.zeros((len(df), nb_classes), dtype=np.int32)
             for i, row in enumerate(df.itertuples()):
                 st = 0
@@ -80,11 +81,16 @@ class DFGenerator(object):
                 data_seq[i, st:(st + len(row.ngrams))] = row.ngrams
                 if isinstance(row.embeddings, np.ndarray):
                     data_net[i, :] = row.embeddings
+                if isinstance(row.interpros, list):
+                    for ipro_id in row.interpros:
+                        if ipro_id in ipro_indexes:
+                            ipros[i, ipro_indexes[ipro_id]] = 1
+            
                 for go_id in row.functions:
                     if go_id in go_indexes:
                         labels[i, go_indexes[go_id]] = 1
             self.start += self.batch_size
-            data = [data_seq, data_net]
+            data = [data_seq, ipros, data_net]
             return (data, labels)
         else:
             self.reset()
@@ -134,6 +140,16 @@ def main(device, org, model_file, is_train, batch_size, epochs):
     names = {}
     global digits
     digits = string.digits + string.ascii_letters
+
+    global ipro_indexes
+    ipro_indexes = {}
+    global interpros
+    interpros = list()
+    with open(DATA_ROOT + 'interpros.list') as f:
+        for i in range(10000):
+            it = next(f).split('\t')
+            ipro_indexes[it[0]] = i
+            interpros.append(it[0])
     
     train_df, valid_df, test_df = load_data(org=org)
     with tf.device('/' + device):
@@ -142,14 +158,13 @@ def main(device, org, model_file, is_train, batch_size, epochs):
         test_model(test_df, model_file, batch_size)
 
 def load_data(org):
-    df = pd.read_pickle(DATA_ROOT + 'data.pkl')
-    n = len(df)
+    train_df = pd.read_pickle(DATA_ROOT + 'train.pkl')
+    test_df = pd.read_pickle(DATA_ROOT + 'test.pkl')
+    n = len(train_df)
     index = np.arange(n)
     train_n = int(n * 0.8)
-    valid_n = int(train_n * 0.8)
-    train_df = df.iloc[index[:valid_n]]
-    valid_df = df.iloc[index[valid_n:train_n]]
-    test_df = df.iloc[index[train_n:]]
+    valid_df = train_df.iloc[index[train_n:]]
+    train_df = train_df.iloc[index[:train_n]]
     if org is not None:
         logging.info('Unfiltered test size: %d' % len(test_df))
         test_df = test_df[test_df['orgs'] == org]
@@ -238,39 +253,39 @@ def get_node_name(go_id):
     # return name
 
 
-def get_function_node(name, inputs, embed):
+def get_function_node(name, inputs, embed, ipros):
     model_file = 'data/binary/model_GO_' + name + '.h5'
-    if os.path.exists(model_file):
-        model = load_model(model_file)
-        print(name, model.input)
-        
-        net = model([inputs, embed])
-        return net
-    else:
-        embedding_dims = 48
-        max_features = 8001
-        net = Embedding(
-            max_features,
-            embedding_dims,
-            input_length=MAXLEN,
-            name=(name + '_e'))(inputs)
-        net = Conv1D(
-            filters=128,
-            kernel_size=15,
-            padding='valid',
-            strides=1,
-            name=(name + '_c0'))(net)
-        net = Conv1D(
-            filters=16,
-            kernel_size=15,
-            padding='valid',
-            strides=1,
-            name=(name + '_c1'))(net)
+    # if os.path.exists(model_file):
+    #     model = load_model(model_file)
+    #     model.name = 'model_' + name
+    #     print(name, model.input)
+    #     net = model([inputs, embed])
+    #     return net
+    embedding_dims = 48
+    max_features = 8001
+    net = Embedding(
+        max_features,
+        embedding_dims,
+        input_length=MAXLEN,
+        name=(name + '_e'))(inputs)
+    net = Conv1D(
+        filters=128,
+        kernel_size=15,
+        padding='valid',
+        strides=1,
+        name=(name + '_c0'))(net)
+    net = Conv1D(
+        filters=16,
+        kernel_size=15,
+        padding='valid',
+        strides=1,
+        name=(name + '_c1'))(net)
 
-        net = Flatten()(net)
-        net = concatenate([net, embed], axis=1)
-        net = Dense(1, name=name, activation='sigmoid')(net)
-        return net
+    net = Flatten()(net)
+    net = concatenate([net, ipros, embed], axis=1)
+    # net = ipros
+    net = Dense(1, name=name, activation='sigmoid')(net)
+    return net
 
 
 def get_layers(inputs):
@@ -313,19 +328,20 @@ def get_model():
     logging.info("Building the model")
     input_seq = Input(shape=(MAXLEN,), dtype='int32', name='seq')
     input_embed = Input(shape=(256,), dtype='float32', name='net')
+    input_ipros = Input(shape=(len(interpros),), dtype='float32', name='ipros')
     # net = get_feature_model()(input_seq)
     # net = concatenate([net, input_net], axis=1)
     # layers = get_layers(net)
     output_models = []
     for i in range(len(functions)):
         name = get_node_name(functions[i])
-        print(i, functions[i])
-        model_file = 'data/binary/model_GO_' + name + '.h5'
-        if not os.path.exists(model_file):
-            print('No model found ', i, functions[i])
+        # print(i, functions[i])
+        # model_file = 'data/binary/model_GO_' + name + '.h5'
+        # if not os.path.exists(model_file):
+        #     print('No model found ', i, functions[i])
         output_models.append(
             get_function_node(
-                name, input_seq, input_embed))
+                name, input_seq, input_embed, input_ipros))
     net = concatenate(output_models, axis=1)
     # net = Dense(1024, activation='relu')(merged)
     # net = Dense(nb_classes, activation='sigmoid')(net)
@@ -337,7 +353,7 @@ def get_model():
     # net = Dense(nb_classes, activation='sigmoid')(features)
     # model = Model(encoder.layers[0].output, net)
     
-    model = Model([input_seq, input_embed], net)
+    model = Model([input_seq, input_ipros, input_embed], net)
     # model.load_weights('data/latest/model-pre.h5')
     logging.info('Compiling the model')
     optimizer = RMSprop()
@@ -375,7 +391,7 @@ def train_model(train_df, valid_df, model_file, batch_size, epochs):
     f = open(model_file + '.json', 'w')
     f.write(model_json)
     f.close()
-    
+    model.save_weights(model_file + '_init.h5')
     model.summary()
     model.fit_generator(
         train_generator,
@@ -433,9 +449,9 @@ def test_model(test_df, model_file, batch_size):
     cc_preds = preds[:, cc_index]
     test_gos = test_df['functions'].values
     logging.info('Computing performance')
-    f, p, r, t, preds_max = compute_performance(mf_preds, mf_labels, test_gos)
-    roc_auc = compute_roc(mf_preds, mf_labels)
-    mcc = compute_mcc(preds_max, mf_labels)
+    f, p, r, t, preds_max = compute_performance(cc_preds, cc_labels, test_gos)
+    roc_auc = compute_roc(cc_preds, cc_labels)
+    mcc = compute_mcc(preds_max, cc_labels)
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('MCC: \t %f ' % (mcc, ))
@@ -563,10 +579,12 @@ def compute_mcc(preds, labels):
 
 def compute_performance(preds, labels, gos):
     preds = np.round(preds, 2)
+    print(preds)
     f_max = 0
     p_max = 0
     r_max = 0
     t_max = 0
+    predictions_max = (preds > 0).astype(np.int32)
     for t in range(1, 100):
         threshold = t / 100.0
         predictions = (preds > threshold).astype(np.int32)
