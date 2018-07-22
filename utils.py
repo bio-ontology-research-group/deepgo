@@ -111,10 +111,11 @@ def get_anchestors(go, go_id):
     q.append(go_id)
     while(len(q) > 0):
         g_id = q.popleft()
-        go_set.add(g_id)
-        for parent_id in go[g_id]['is_a']:
-            if parent_id in go:
-                q.append(parent_id)
+        if g_id not in go_set:
+            go_set.add(g_id)
+            for parent_id in go[g_id]['is_a']:
+                if parent_id in go:
+                    q.append(parent_id)
     return go_set
 
 
@@ -132,9 +133,10 @@ def get_go_set(go, go_id):
     q.append(go_id)
     while len(q) > 0:
         g_id = q.popleft()
-        go_set.add(g_id)
-        for ch_id in go[g_id]['children']:
-            q.append(ch_id)
+        if g_id not in go_set:
+            go_set.add(g_id)
+            for ch_id in go[g_id]['children']:
+                q.append(ch_id)
     return go_set
 
 def read_fasta(lines):
