@@ -18,7 +18,7 @@ The scripts require GeneOntology in OBO Format.
 
 ## Running
 * Download the data file from http://deepgo.bio2vec.net/data/data.tar.gz and extract data folder
-* Install ncbi-blast program on your system (blastp command should be available)
+* Install [diamond](https://github.com/bbuchfink/diamond) program on your system (diamond command should be available)
 * run predict_all.py script with -i <input_fasta_filename> arguments
 * See the results in results.tsv file
 

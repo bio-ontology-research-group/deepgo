@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from keras.models import load_model
 from subprocess import Popen, PIPE
+import time
 
 models = list()
 funcs = ['cc', 'mf', 'bp']
@@ -30,8 +31,12 @@ def read_fasta(filename):
             line = line.strip()
             if line.startswith('>'):
                 if seq != '':
-                    seqs.append(seq)
-                    info.append(inf)
+                    if len(seq) <= 1002:
+                        seqs.append(seq)
+                        info.append(inf)
+                    else:
+                        print('Ignoring sequence {} because its length > 1002'
+                              .format(inf))
                     seq = ''
                 inf = line[1:].split()[0]
             else:
@@ -45,9 +50,9 @@ def get_data(sequences):
     data = np.zeros((n, 1000), dtype=np.float32)
     embeds = np.zeros((n, 256), dtype=np.float32)
     
-    p = Popen(['blastp', '-db', 'data/embeddings.fa',
-               '-max_target_seqs', '1', '-num_threads', '128',
-               '-outfmt', '6 qseqid sseqid'], stdin=PIPE, stdout=PIPE)
+    p = Popen(['diamond', 'blastp', '-d', 'data/embeddings',
+               '--max-target-seqs', '1',
+               '--outfmt', '6', 'qseqid', 'sseqid'], stdin=PIPE, stdout=PIPE)
     for i in xrange(n):
         p.stdin.write('>' + str(i) + '\n' + sequences[i] + '\n')
     p.stdin.close()
@@ -56,7 +61,8 @@ def get_data(sequences):
     if p.wait() == 0:
         for line in p.stdout:
             it = line.strip().split('\t')
-            prot_ids[it[1]] = int(it[0])
+            if len(it) == 2:
+                prot_ids[it[1]] = int(it[0])
     prots = embed_df[embed_df['accessions'].isin(prot_ids.keys())]
     for i, row in prots.iterrows():
         embeds[prot_ids[row['accessions']], :] = row['embeddings']
@@ -113,6 +119,8 @@ def init_models(conf=None, **kwargs):
 def predict_functions(sequences, threshold=0.3):
     if not models:
         init_models()
+    print('Predictions started')
+    start_time = time.time()
     data = get_data(sequences)
     result = list()
     n = len(sequences)
@@ -124,6 +132,7 @@ def predict_functions(sequences, threshold=0.3):
         res = predict(data, model, functions, threshold)
         for j in xrange(n):
             result[j] += res[j]
+    print('Predictions time: {}'.format(time.time() - start_time))
     return result
 
 
