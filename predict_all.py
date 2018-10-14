@@ -6,6 +6,7 @@ import pandas as pd
 from keras.models import load_model
 from subprocess import Popen, PIPE
 import time
+from aaindex import is_ok
 
 models = list()
 funcs = ['cc', 'mf', 'bp']
@@ -31,11 +32,11 @@ def read_fasta(filename):
             line = line.strip()
             if line.startswith('>'):
                 if seq != '':
-                    if len(seq) <= 1002:
+                    if is_ok(seq):
                         seqs.append(seq)
                         info.append(inf)
                     else:
-                        print('Ignoring sequence {} because its length > 1002'
+                        print('Ignoring sequence {} because its length > 1002 or amino acids'
                               .format(inf))
                     seq = ''
                 inf = line[1:].split()[0]
