@@ -13,15 +13,32 @@ funcs = ['cc', 'mf', 'bp']
 
 
 @ck.command()
-@ck.option('--in_file', '-i', help='Input FASTA file', required=True)
-@ck.option('--out_file', '-o', default='results.tsv', help='Output result file')
-def main(in_file, out_file):
+@ck.option('--in-file', '-i', help='Input FASTA file', required=True)
+@ck.option('--out-file', '-o', default='results.tsv', help='Output result file')
+@ck.option('--mapping-file', '-m', default='', help='Mapping file for embeddings database')
+@ck.option('--batch-size', '-bs', default=1, help='Batch size for prediction model')
+def main(in_file, out_file, mapping_file, batch_size):
     ids, sequences = read_fasta(in_file)
-    results = predict_functions(sequences)
+    prot_ids = None
+    if mapping_file != '':
+        mapping = read_mapping(mapping_file)
+        prot_ids = {}
+        for i, seq_id in enumerate(ids):
+            if seq_id in mapping:
+                prot_ids[mapping[seq_id]] = i
+    results = predict_functions(sequences, prot_ids, batch_size)
     df = pd.DataFrame({'id': ids, 'predictions': results})
     df.to_csv(out_file, sep='\t')
 
 
+def read_mapping(mapping_file):
+    mapping = {}
+    with open(mapping_file, 'r') as f:
+        for line in f:
+            it = line.strip().split()
+            mapping[it[0]] = it[1]
+    return mapping
+    
 def read_fasta(filename):
     seqs = list()
     info = list()
@@ -46,28 +63,30 @@ def read_fasta(filename):
         info.append(inf)
     return info, seqs
 
-def get_data(sequences):
+def get_data(sequences, prot_ids):
     n = len(sequences)
     data = np.zeros((n, 1000), dtype=np.float32)
     embeds = np.zeros((n, 256), dtype=np.float32)
-    
-    p = Popen(['diamond', 'blastp', '-d', 'data/embeddings',
-               '--max-target-seqs', '1',
-               '--outfmt', '6', 'qseqid', 'sseqid'], stdin=PIPE, stdout=PIPE)
-    for i in xrange(n):
-        p.stdin.write('>' + str(i) + '\n' + sequences[i] + '\n')
-    p.stdin.close()
 
-    prot_ids = {}
-    if p.wait() == 0:
-        for line in p.stdout:
-            it = line.strip().split('\t')
-            if len(it) == 2:
-                prot_ids[it[1]] = int(it[0])
+    if prot_ids is None:
+        p = Popen(['diamond', 'blastp', '-d', 'data/embeddings',
+                   '--max-target-seqs', '1',
+                   '--outfmt', '6', 'qseqid', 'sseqid'], stdin=PIPE, stdout=PIPE)
+        for i in xrange(n):
+            p.stdin.write('>' + str(i) + '\n' + sequences[i] + '\n')
+        p.stdin.close()
+
+        prot_ids = {}
+        if p.wait() == 0:
+            for line in p.stdout:
+                it = line.strip().split('\t')
+                if len(it) == 2:
+                    prot_ids[it[1]] = int(it[0])
+
     prots = embed_df[embed_df['accessions'].isin(prot_ids.keys())]
     for i, row in prots.iterrows():
         embeds[prot_ids[row['accessions']], :] = row['embeddings']
-        
+
     for i in xrange(len(sequences)):
         seq = sequences[i]
         for j in xrange(len(seq) - gram_len + 1):
@@ -117,12 +136,12 @@ def init_models(conf=None, **kwargs):
         # print result
 
 
-def predict_functions(sequences, threshold=0.3):
+def predict_functions(sequences, prot_ids, batch_size, threshold=0.3):
     if not models:
         init_models()
     print('Predictions started')
     start_time = time.time()
-    data = get_data(sequences)
+    data = get_data(sequences, prot_ids)
     result = list()
     n = len(sequences)
     for i in xrange(n):
@@ -130,7 +149,7 @@ def predict_functions(sequences, threshold=0.3):
     for i in range(len(models)):
         model, functions = models[i]
         print 'Running predictions for model %s' % funcs[i]
-        res = predict(data, model, functions, threshold)
+        res = predict(data, model, functions, threshold, batch_size)
         for j in xrange(n):
             result[j] += res[j]
     print('Predictions time: {}'.format(time.time() - start_time))
