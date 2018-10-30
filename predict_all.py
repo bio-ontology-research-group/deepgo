@@ -6,29 +6,41 @@ import pandas as pd
 from keras.models import load_model
 from subprocess import Popen, PIPE
 import time
-from aaindex import is_ok
+from aaindex import INVALID_ACIDS
 
+MAXLEN = 1002
 models = list()
 funcs = ['cc', 'mf', 'bp']
 
 
 @ck.command()
 @ck.option('--in-file', '-i', help='Input FASTA file', required=True)
+@ck.option('--chunk-size', '-cs', default=1000, help='Number of sequences to read at a time')
 @ck.option('--out-file', '-o', default='results.tsv', help='Output result file')
 @ck.option('--mapping-file', '-m', default='', help='Mapping file for embeddings database')
+@ck.option('--threshold', '-t', default=0.3, help='Prediction threshold')
 @ck.option('--batch-size', '-bs', default=1, help='Batch size for prediction model')
-def main(in_file, out_file, mapping_file, batch_size):
-    ids, sequences = read_fasta(in_file)
+@ck.option('--include-long-seq', '-ils', is_flag=True, help='Include long sequences')
+def main(in_file, chunk_size, out_file, mapping_file, threshold, batch_size, include_long_seq):
     prot_ids = None
+    mapping = None
     if mapping_file != '':
         mapping = read_mapping(mapping_file)
         prot_ids = {}
-        for i, seq_id in enumerate(ids):
-            if seq_id in mapping:
-                prot_ids[mapping[seq_id]] = i
-    results = predict_functions(sequences, prot_ids, batch_size)
-    df = pd.DataFrame({'id': ids, 'predictions': results})
-    df.to_csv(out_file, sep='\t')
+
+    w = open(out_file, 'w')
+    for ids, sequences in read_fasta(in_file, chunk_size, include_long_seq):
+        if mapping is not None:
+            for i, seq_id in enumerate(ids):
+                if seq_id in mapping:
+                    prot_ids[mapping[seq_id]] = i
+        results = predict_functions(sequences, prot_ids, batch_size, threshold)
+        for i in range(len(ids)):
+            w.write(ids[i])
+            for res in results[i]:
+                w.write('\t' + res)
+            w.write('\n')
+    w.close()
 
 
 def read_mapping(mapping_file):
@@ -38,8 +50,15 @@ def read_mapping(mapping_file):
             it = line.strip().split()
             mapping[it[0]] = it[1]
     return mapping
-    
-def read_fasta(filename):
+
+def is_ok(seq):
+    for c in seq:
+        if c in INVALID_ACIDS:
+            return False
+    return True
+
+
+def read_fasta(filename, chunk_size, include_long_seq):
     seqs = list()
     info = list()
     seq = ''
@@ -50,18 +69,34 @@ def read_fasta(filename):
             if line.startswith('>'):
                 if seq != '':
                     if is_ok(seq):
-                        seqs.append(seq)
-                        info.append(inf)
-                    else:
-                        print('Ignoring sequence {} because its length > 1002 or amino acids'
+                        if include_long_seq:
+                            seqs.append(seq)
+                            info.append(inf)
+                            if len(info) == chunk_size:
+                                yield (info, seqs)
+                                seqs = list()
+                                info = list()
+                        elif len(seq) <= MAXLEN:
+                            seqs.append(seq)
+                            info.append(inf)
+                            if len(info) == chunk_size:
+                                yield (info, seqs)
+                                seqs = list()
+                                info = list()
+                        else:
+                            print('Ignoring sequence {} because its length > 1002'
                               .format(inf))
+                    else:
+                        print('Ignoring sequence {} because of ambigious AA'
+                              .format(inf))
+                    
                     seq = ''
                 inf = line[1:].split()[0]
             else:
                 seq += line
         seqs.append(seq)
         info.append(inf)
-    return info, seqs
+    yield (info, seqs)
 
 def get_data(sequences, prot_ids):
     n = len(sequences)
@@ -89,23 +124,23 @@ def get_data(sequences, prot_ids):
 
     for i in xrange(len(sequences)):
         seq = sequences[i]
-        for j in xrange(len(seq) - gram_len + 1):
+        for j in xrange(min(MAXLEN, len(seq)) - gram_len + 1):
             data[i, j] = vocab[seq[j: (j + gram_len)]]
     return [data, embeds]
 
 
-def predict(data, model, functions, threshold, batch_size=1):
+def predict(data, model, model_name, functions, threshold, batch_size):
     n = data[0].shape[0]
     result = list()
     for i in xrange(n):
         result.append(list())
     predictions = model.predict(
-        data, batch_size=batch_size)
+        data, batch_size=batch_size, verbose=1)
     for i in xrange(n):
         pred = (predictions[i] >= threshold).astype('int32')
         for j in xrange(len(functions)):
             if pred[j] == 1:
-                result[i].append(functions[j])
+                result[i].append(model_name + '_' + functions[j] + '|' + '%.2f' % predictions[i][j])
     return result
 
 
@@ -136,7 +171,7 @@ def init_models(conf=None, **kwargs):
         # print result
 
 
-def predict_functions(sequences, prot_ids, batch_size, threshold=0.3):
+def predict_functions(sequences, prot_ids, batch_size, threshold):
     if not models:
         init_models()
     print('Predictions started')
@@ -149,7 +184,7 @@ def predict_functions(sequences, prot_ids, batch_size, threshold=0.3):
     for i in range(len(models)):
         model, functions = models[i]
         print 'Running predictions for model %s' % funcs[i]
-        res = predict(data, model, functions, threshold, batch_size)
+        res = predict(data, model, funcs[i], functions, threshold, batch_size)
         for j in xrange(n):
             result[j] += res[j]
     print('Predictions time: {}'.format(time.time() - start_time))
