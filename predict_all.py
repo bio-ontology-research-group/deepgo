@@ -31,6 +31,7 @@ def main(in_file, chunk_size, out_file, mapping_file, threshold, batch_size, inc
     w = open(out_file, 'w')
     for ids, sequences in read_fasta(in_file, chunk_size, include_long_seq):
         if mapping is not None:
+            prot_ids = {}
             for i, seq_id in enumerate(ids):
                 if seq_id in mapping:
                     prot_ids[mapping[seq_id]] = i
