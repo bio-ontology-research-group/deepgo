@@ -106,7 +106,7 @@ def get_data(sequences, prot_ids):
 
     if prot_ids is None:
         p = Popen(['diamond', 'blastp', '-d', 'data/embeddings',
-                   '--max-target-seqs', '1',
+                   '--max-target-seqs', '1', '--min-score', '60',
                    '--outfmt', '6', 'qseqid', 'sseqid'], stdin=PIPE, stdout=PIPE)
         for i in xrange(n):
             p.stdin.write('>' + str(i) + '\n' + sequences[i] + '\n')
