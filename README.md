@@ -17,17 +17,15 @@ The scripts require GeneOntology in OBO Format.
 * evaluation.py script is used to evalutate the performance of the FFPred, GOFDR and our method.
 
 ## Running
-* Download the data file from http://deepgo.bio2vec.net/data/data.tar.gz and extract data folder
+* Download the data file from http://deepgo.bio2vec.net/data/deepgo/data.tar.gz and extract data folder
 * Install [diamond](https://github.com/bbuchfink/diamond) program on your system (diamond command should be available)
 * run predict_all.py script with -i <input_fasta_filename> arguments
 * See the results in results.tsv file
 
 ## Data
 * eval_data.tar.gz - This archive contains data used to compare GOFDR, FFPred and our method.
-* http://deepgo.bio2vec.net/data/data.tar.gz - The files required to run predict_all.py script
+* http://deepgo.bio2vec.net/data/deepgo/data.tar.gz - The files required to run predict_all.py script
 
-
-The online version of DeepGO is available at http://deepgo.bio2vec.net/
 
 [1]: https://doi.org/10.1093/bioinformatics/btx275
 
