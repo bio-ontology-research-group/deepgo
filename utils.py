@@ -275,12 +275,12 @@ class DataGenerator(object):
         self.has_targets = targets is not None
 
     def __next__(self):
-        return next(self)
+        return self.next()
 
     def reset(self):
         self.start = 0
 
-    def __next__(self):
+    def next(self):
         if self.start < self.size:
             # output = []
             # if self.has_targets:
@@ -304,7 +304,7 @@ class DataGenerator(object):
             return res_inputs
         else:
             self.reset()
-            return next(self)
+            return self.next()
 
 
 if __name__ == '__main__':
