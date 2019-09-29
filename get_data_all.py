@@ -23,7 +23,7 @@ def main(split):
     global SPLIT
     SPLIT = split
     global GO_IDS
-    GO_IDS = FUNC_DICT.values()
+    GO_IDS = list(FUNC_DICT.values())
     global go
     go = get_gene_ontology('go.obo')
     func_df = pd.read_pickle(DATA_ROOT + 'bp.pkl')
@@ -38,7 +38,7 @@ def main(split):
         get_go_set(go, GO_IDS[0])
         | get_go_set(go, GO_IDS[1])
         | get_go_set(go, GO_IDS[2]))
-    print len(functions)
+    print(len(functions))
     global go_indexes
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
@@ -52,8 +52,8 @@ def load_data():
     for key, gram in enumerate(ngram_df['ngrams']):
         vocab[gram] = key + 1
     gram_len = len(ngram_df['ngrams'][0])
-    print('Gram length:', gram_len)
-    print('Vocabulary size:', len(vocab))
+    print(('Gram length:', gram_len))
+    print(('Vocabulary size:', len(vocab)))
     proteins = list()
     gos = list()
     labels = list()
@@ -89,7 +89,7 @@ def load_data():
         seq = row['sequences']
         sequences.append(seq)
         grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
-        for i in xrange(len(seq) - gram_len + 1):
+        for i in range(len(seq) - gram_len + 1):
             grams[i] = vocab[seq[i: (i + gram_len)]]
         ngrams.append(grams)
         label = np.zeros((len(functions),), dtype='int32')
@@ -104,7 +104,7 @@ def load_data():
         'labels': labels,
         'gos': gos,
         'sequences': sequences})
-    print(len(res_df))
+    print((len(res_df)))
     return res_df
 
 
@@ -129,7 +129,7 @@ def run(*args, **kwargs):
         if not isinstance(row['embeddings'], np.ndarray):
             row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
-    print('Missing network reps:', missing_rep)
+    print(('Missing network reps:', missing_rep))
     index = df.index.values
     np.random.seed(seed=0)
     np.random.shuffle(index)
@@ -139,7 +139,7 @@ def run(*args, **kwargs):
     # prots_df = pd.read_pickle('data/swiss/clusters.pkl')
     # train_df = df[df['proteins'].isin(prots_df['proteins'])]
     # test_df = df[~df['proteins'].isin(prots_df['proteins'])]
-    print(len(train_df), len(test_df))
+    print((len(train_df), len(test_df)))
     train_df.to_pickle(DATA_ROOT + 'train.pkl')
     test_df.to_pickle(DATA_ROOT + 'test.pkl')
 

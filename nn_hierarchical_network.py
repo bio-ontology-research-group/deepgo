@@ -111,7 +111,7 @@ def main(function, device, org, train, param):
         nb_filters = [16, 32, 64, 128]
         nb_convs = [1, 2, 3, 4]
         nb_dense = [1, 2, 3, 4]
-        for i in xrange(param * 32, param * 32 + 32):
+        for i in range(param * 32, param * 32 + 32):
             dim = i % 4
             i = i / 4
             nb_fil = i % 4
@@ -189,7 +189,7 @@ def get_feature_model(params):
         embedding_dims,
         input_length=MAXLEN,
         dropout=params['embedding_dropout']))
-    for i in xrange(params['nb_conv']):
+    for i in range(params['nb_conv']):
         model.add(Convolution1D(
             nb_filter=params['nb_filter'],
             filter_length=params['filter_length'],
@@ -289,7 +289,7 @@ def get_model(params):
     net = merge(
         [feature_model, inputs2], mode='concat',
         concat_axis=1, name='merged')
-    for i in xrange(params['nb_dense']):
+    for i in range(params['nb_dense']):
         net = Dense(params['fc_output'], activation='relu')(net)
     layers = get_layers(net)
     output_models = []
@@ -382,14 +382,14 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
     logging.info('Fmax measure: \t %f %f %f %f' % (f, p, r, t))
     logging.info('ROC AUC: \t %f ' % (roc_auc, ))
     logging.info('MCC: \t %f ' % (mcc, ))
-    print('%.3f & %.3f & %.3f & %.3f & %.3f' % (
-        f, p, r, roc_auc, mcc))
+    print(('%.3f & %.3f & %.3f & %.3f & %.3f' % (
+        f, p, r, roc_auc, mcc)))
     # return f
     # logging.info('Inconsistent predictions: %d' % incon)
     # logging.info('Saving the predictions')
     proteins = test_df['proteins']
     predictions = list()
-    for i in xrange(preds_max.shape[0]):
+    for i in range(preds_max.shape[0]):
         predictions.append(preds_max[i])
     df = pd.DataFrame(
         {
@@ -444,7 +444,7 @@ def performanc_by_interpro():
         rc = 0
         total = 0
         p_total = 0
-        for i in xrange(len(labels)):
+        for i in range(len(labels)):
             tp = np.sum(labels[i] * predictions[i])
             fp = np.sum(predictions[i]) - tp
             fn = np.sum(labels[i]) - tp
@@ -469,19 +469,19 @@ def performanc_by_interpro():
             pr /= p_total
             if pr + rc > 0:
                 f = 2 * pr * rc / (pr + rc)
-                print('%s\t%d\t%f\t%f\t%f' % (
-                    ipro_id, len(labels), f, pr, rc))
+                print(('%s\t%d\t%f\t%f\t%f' % (
+                    ipro_id, len(labels), f, pr, rc)))
 
 
 def function_centric_performance(functions, preds, labels):
     preds = np.round(preds, 2)
-    for i in xrange(len(functions)):
+    for i in range(len(functions)):
         f_max = 0
         p_max = 0
         r_max = 0
         x = list()
         y = list()
-        for t in xrange(1, 100):
+        for t in range(1, 100):
             threshold = t / 100.0
             predictions = (preds[i, :] > threshold).astype(np.int32)
             tp = np.sum(predictions * labels[i, :])
@@ -502,8 +502,8 @@ def function_centric_performance(functions, preds, labels):
                 r_max = recall
         num_prots = np.sum(labels[i, :])
         roc_auc = auc(x, y)
-        print('%s %f %f %f %d %f' % (
-            functions[i], f_max, p_max, r_max, num_prots, roc_auc))
+        print(('%s %f %f %f %d %f' % (
+            functions[i], f_max, p_max, r_max, num_prots, roc_auc)))
 
 
 def compute_roc(preds, labels):
@@ -524,7 +524,7 @@ def compute_performance(preds, labels, gos):
     p_max = 0
     r_max = 0
     t_max = 0
-    for t in xrange(1, 100):
+    for t in range(1, 100):
         threshold = t / 100.0
         predictions = (preds > threshold).astype(np.int32)
         total = 0
@@ -570,7 +570,7 @@ def compute_performance(preds, labels, gos):
 def get_gos(pred):
     mdist = 1.0
     mgos = None
-    for i in xrange(len(labels_gos)):
+    for i in range(len(labels_gos)):
         labels, gos = labels_gos[i]
         dist = distance.cosine(pred, labels)
         if mdist > dist:
@@ -585,7 +585,7 @@ def compute_similarity_performance(train_df, test_df, preds):
     train_labels = train_df['labels'].values
     train_gos = train_df['gos'].values
     global labels_gos
-    labels_gos = zip(train_labels, train_gos)
+    labels_gos = list(zip(train_labels, train_gos))
     p = Pool(64)
     pred_gos = p.map(get_gos, preds)
     total = 0

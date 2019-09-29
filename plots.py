@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
+
 import os
 import sys
 import numpy as np
@@ -64,7 +64,7 @@ def plot_sequence_stats():
             index.append(i)
     df = df.iloc[index]
     print(len(df))
-    lens = map(len, df['sequences'])
+    lens = list(map(len, df['sequences']))
     c = 0
     for i in lens:
         if i <= 1002:
@@ -72,7 +72,7 @@ def plot_sequence_stats():
     print(c)
     h = np.histogram(lens, bins=(
         0, 500, 1000, 1500, 2000, 40000))
-    plt.bar(range(5),
+    plt.bar(list(range(5)),
         h[0], width=1, facecolor='green')
     titles = ['<=500', '<=1000', '<=1500', '<=2000', '>2000']
     plt.xticks(np.arange(0.5, 5.5, 1), titles)

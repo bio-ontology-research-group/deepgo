@@ -170,8 +170,8 @@ def get_data():
     for key, gram in enumerate(ngram_df['ngrams']):
         vocab[gram] = key + 1
     gram_len = len(ngram_df['ngrams'][0])
-    print('Gram length:', gram_len)
-    print('Vocabulary size:', len(vocab))
+    print(('Gram length:', gram_len))
+    print(('Vocabulary size:', len(vocab)))
 
     with open('data/eshark/targets.txt') as f:
         for line in f:
@@ -185,7 +185,7 @@ def get_data():
                 else:
                     proteins.append('')
                 grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
-                for i in xrange(len(seq) - gram_len + 1):
+                for i in range(len(seq) - gram_len + 1):
                     grams[i] = vocab[seq[i: (i + gram_len)]]
                 ngrams.append(grams)
 
@@ -194,7 +194,7 @@ def get_data():
         'accessions': proteins,
         'ngrams': ngrams})
     
-    print(len(df))
+    print((len(df)))
     embed_df = pd.read_pickle('data/graph_new_embeddings.pkl')
 
     df = pd.merge(df, embed_df, on='accessions', how='left')
@@ -253,9 +253,9 @@ def get_results(model):
     df = pd.merge(targets, mf_preds, on='targets')
     df = pd.merge(df, cc_preds, on='targets')
     df = pd.merge(df, bp_preds, on='targets')
-    mf = map(str, mf_df['functions'].values)
-    cc = map(str, cc_df['functions'].values)
-    bp = map(str, bp_df['functions'].values)
+    mf = list(map(str, mf_df['functions'].values))
+    cc = list(map(str, cc_df['functions'].values))
+    bp = list(map(str, bp_df['functions'].values))
     taxons = set(df['orgs'].values)
     annots = get_real_annotations()
     for tax_id in taxons:
@@ -289,8 +289,8 @@ def get_results(model):
             f.write('AUTHOR CBRC_BORG\n')
             f.write('MODEL 3\n')
             f.write('KEYWORDS sequence properties, machine learning.\n')
-            for target_id, annots in results.iteritems():
-                for go_id, score in annots.iteritems():
+            for target_id, annots in results.items():
+                for go_id, score in annots.items():
                     sc = '%.2f' % score
                     f.write(target_id + '\t' + go_id + '\t' + sc + '\n')
             f.write('END\n')
@@ -308,7 +308,7 @@ def get_predictions():
         prot_id = row['proteins']
         if prot_id not in preds:
             preds[prot_id] = set()
-        for i in xrange(len(functions)):
+        for i in range(len(functions)):
             if row['predictions'][i] == 1:
                 preds[prot_id].add(functions[i])
         if prot_id not in annots:
@@ -321,7 +321,7 @@ def get_predictions():
         prot_id = row['proteins']
         if prot_id not in preds:
             preds[prot_id] = set()
-        for i in xrange(len(functions)):
+        for i in range(len(functions)):
             if row['predictions'][i] == 1:
                 preds[prot_id].add(functions[i])
         if prot_id not in annots:
@@ -334,7 +334,7 @@ def get_predictions():
         prot_id = row['proteins']
         if prot_id not in preds:
             preds[prot_id] = set()
-        for i in xrange(len(functions)):
+        for i in range(len(functions)):
             if row['predictions'][i] == 1:
                 preds[prot_id].add(functions[i])
         if prot_id not in annots:
@@ -349,7 +349,7 @@ def get_predictions():
             anchestors.remove(go_id)
             go_set -= anchestors
 
-    proteins = sorted(annots.keys(), key=lambda x: (
+    proteins = sorted(list(annots.keys()), key=lambda x: (
         x.split('_')[1], x.split('_')[0]))
     with open(root + 'test_predictions.tab', 'w') as f:
         for prot_id in proteins:
@@ -427,7 +427,7 @@ def compute_performance():
     p = 0.0
     r = 0.0
     f = 0.0
-    for prot, pred_annots in preds.iteritems():
+    for prot, pred_annots in preds.items():
         real_annots = annots[prot]
         if len(real_annots) == 0:
             continue
@@ -443,7 +443,7 @@ def compute_performance():
             p += precision
             r += recall
             f += 2 * precision * recall / (precision + recall)
-    print(f / total, p / total, r / total)
+    print((f / total, p / total, r / total))
 
 
 def main(*args, **kwargs):

@@ -34,7 +34,7 @@ def main(function, annot_num):
     dfs(GO_ID)
     functions.remove(GO_ID)
     functions = list(functions)
-    print(len(functions))
+    print((len(functions)))
     global func_set
     func_set = set(functions)
     global go_indexes
@@ -75,10 +75,10 @@ def get_functions(annot_num):
     for go_id in functions:
         if go_id in annots and annots[go_id] >= annot_num:
             filtered.append(go_id)
-    print len(filtered)
+    print(len(filtered))
     df = pd.DataFrame({'functions': filtered})
     df.to_pickle(DATA_ROOT + FUNCTION + '.pkl')
-    print 'Saved ' + DATA_ROOT + FUNCTION + '.pkl'
+    print('Saved ' + DATA_ROOT + FUNCTION + '.pkl')
 
 
 if __name__ == '__main__':

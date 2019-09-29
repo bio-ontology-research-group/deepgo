@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import sys
 import os
 import pandas as pd
@@ -51,7 +51,7 @@ def get_text_reps():
             items = line.strip().split('\t')
             if items[0] in uni_ids:
                 text_reps[uni_ids[items[0]]] = np.array(
-                    map(float, items[1:]), dtype='float32')
+                    list(map(float, items[1:])), dtype='float32')
     return text_reps
 
 

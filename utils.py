@@ -87,10 +87,10 @@ def get_gene_ontology(filename='go.obo'):
                     obj['is_obsolete'] = True
     if obj is not None:
         go[obj['id']] = obj
-    for go_id in go.keys():
+    for go_id in list(go.keys()):
         if go[go_id]['is_obsolete']:
             del go[go_id]
-    for go_id, val in go.iteritems():
+    for go_id, val in go.items():
         if 'children' not in val:
             val['children'] = set()
         for p_id in val['is_a']:
@@ -247,16 +247,16 @@ class MyCheckpoint(ModelCheckpoint):
         else:
             if self.monitor_op(current, self.best):
                 if self.verbose > 0:
-                    print('Epoch %05d: %s improved from %0.5f to %0.5f,'
+                    print(('Epoch %05d: %s improved from %0.5f to %0.5f,'
                           ' saving model to %s'
                           % (epoch, self.monitor, self.best,
-                             current, filepath))
+                             current, filepath)))
                 self.best = current
                 save_model_weights(self.model, filepath)
             else:
                 if self.verbose > 0:
-                    print('Epoch %05d: %s did not improve' %
-                          (epoch, self.monitor))
+                    print(('Epoch %05d: %s did not improve' %
+                          (epoch, self.monitor)))
 
 
 class DataGenerator(object):
@@ -275,12 +275,12 @@ class DataGenerator(object):
         self.has_targets = targets is not None
 
     def __next__(self):
-        return self.next()
+        return next(self)
 
     def reset(self):
         self.start = 0
 
-    def next(self):
+    def __next__(self):
         if self.start < self.size:
             # output = []
             # if self.has_targets:
@@ -304,7 +304,7 @@ class DataGenerator(object):
             return res_inputs
         else:
             self.reset()
-            return self.next()
+            return next(self)
 
 
 if __name__ == '__main__':

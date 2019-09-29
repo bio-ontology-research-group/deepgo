@@ -132,12 +132,12 @@ def model(model_name):
     # logging.info('Inconsistent predictions: %d' % incon)
 
     predictions = list()
-    for i in xrange(len(targets)):
+    for i in range(len(targets)):
         predictions.append(preds[i])
     df = pd.DataFrame({
         'targets': targets,
         'predictions': predictions})
-    print(len(df))
+    print((len(df)))
     df.to_pickle(DATA_ROOT + model_name + '_preds_' + FUNCTION + '.pkl')
     logging.info('Done in %d sec' % (time.time() - start_time))
 
@@ -149,7 +149,7 @@ def add_gos():
     for i, row in df.iterrows():
         preds = row['predictions']
         go_ids = list()
-        for i in xrange(len(preds)):
+        for i in range(len(preds)):
             if preds[i] >= threshold:
                 go_ids.append(functions[i])
         gos.append(filter_specific(go, go_ids))

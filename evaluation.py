@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import os
 import numpy as np
@@ -45,7 +45,7 @@ def main(function):
     # print(len(preds_dict))
     target_ids = list()
     predictions = list()
-    for key, val in preds_dict.iteritems():
+    for key, val in preds_dict.items():
         target_ids.append(key)
         predictions.append(val)
     # pred_df = pd.DataFrame({'targets': target_ids, 'predictions': predictions})
@@ -62,7 +62,7 @@ def main(function):
     target_ids = list()
     labels = list()
     go_ids = list()
-    for target, gos in targets.iteritems():
+    for target, gos in targets.items():
         go_set = set()
         for go_id in gos:
             if go_id in all_functions:
@@ -145,7 +145,7 @@ def compute_performance(preds, labels, gos):
     p_max = 0
     r_max = 0
     t_max = 0
-    for t in xrange(1, 100):
+    for t in range(1, 100):
         threshold = t / 100.0
         predictions = (preds > threshold).astype(np.int32)
         # predictions = list()

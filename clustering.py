@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import click as ck
 import numpy as np
@@ -45,11 +45,11 @@ def load_data(threshold):
             if prot2 not in sim:
                 sim[prot2] = {}
             sim[prot2][prot1] = score
-    prots = sim.keys()
+    prots = list(sim.keys())
     n = len(prots)
     X = np.zeros((n, n), dtype=np.float32)
-    for i in xrange(n):
-        for j in xrange(i + 1, n):
+    for i in range(n):
+        for j in range(i + 1, n):
             if prots[j] in sim[prots[i]]:
                 score = sim[prots[i]][prots[j]]
                 X[i, j] = score

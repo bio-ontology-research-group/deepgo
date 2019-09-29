@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import pandas as pd
 import numpy as np
 from utils import EXP_CODES, get_gene_ontology
@@ -70,7 +70,7 @@ def to_pickle():
     #         annots_dict[prot_id] = set(row['annots'])
     proteins = list()
     annots = list()
-    for prot, gos in annots_dict.iteritems():
+    for prot, gos in annots_dict.items():
         annots.append(list(gos))
         proteins.append(prot)
     annots_df = pd.DataFrame({
@@ -105,7 +105,7 @@ def goa_pickle():
 
     proteins = list()
 
-    for access, gos in goa.iteritems():
+    for access, gos in goa.items():
         if access in prots:
             accessions.append(access)
             proteins.append(prots[access])
@@ -177,11 +177,11 @@ def string_uni():
             if st_id in mapping:
                 ac_id = mapping[st_id]
                 embeds[ac_id] = np.array(
-                    map(float, it[1:]), dtype='float32')
+                    list(map(float, it[1:])), dtype='float32')
 
     df = pd.DataFrame({
-        'accessions': embeds.keys(),
-        'embeddings': embeds.values()})
+        'accessions': list(embeds.keys()),
+        'embeddings': list(embeds.values())})
     print(len(df))
     df.to_pickle('data/graph_new_embeddings.pkl')
 
@@ -257,7 +257,7 @@ def predictions(org_id):
             preds[target_id].append(go_id)
     targets = list()
     predicts = list()
-    for t, p in preds.iteritems():
+    for t, p in preds.items():
         targets.append(t)
         predicts.append(p)
     df = pd.DataFrame({'targets': targets, 'predictions': predicts})
@@ -301,7 +301,7 @@ def human_go_annotations():
         if isinstance(row['string'], str):
             st_ids[row['accessions']] = row['string']
     with open('data/human_annotations.tab', 'w') as f:
-        for acc, gos in annots.iteritems():
+        for acc, gos in annots.items():
             if acc in st_ids:
                 f.write(st_ids[acc])
                 for go_id in gos:
@@ -362,7 +362,7 @@ def gp2protein(org):
             if it[1] in mapping:
                 for uni_id in mapping[it[1]]:
                     fw.write('UniProtKB\t' + uni_id)
-                    for i in xrange(2, len(it)):
+                    for i in range(2, len(it)):
                         fw.write('\t' + it[i])
                     fw.write('\n')
 
@@ -389,7 +389,7 @@ def merge_trembl():
         for line in f:
             it = line.strip().split('\t')
             w.write(it[0] + '\t' + it[1] + '\t' + seqs[it[0]] + '\t' + it[2])
-            for i in xrange(3, len(it)):
+            for i in range(3, len(it)):
                 w.write('; ' + it[i])
             w.write('\n')
     w.close()

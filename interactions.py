@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
+
 import os
 import sys
 import numpy as np
@@ -29,8 +29,8 @@ def main():
     proteins = list(index.keys())
     new_scores = list()
     interactions = list()
-    for i in xrange(n):
-        for j in xrange(n):
+    for i in range(n):
+        for j in range(n):
             x = index[proteins[i]]
             y = index[proteins[j]]
             new_scores.append(scores[m * x + y])

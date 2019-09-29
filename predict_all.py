@@ -85,11 +85,11 @@ def read_fasta(filename, chunk_size, include_long_seq):
                                 seqs = list()
                                 info = list()
                         else:
-                            print('Ignoring sequence {} because its length > 1002'
-                              .format(inf))
+                            print(('Ignoring sequence {} because its length > 1002'
+                              .format(inf)))
                     else:
-                        print('Ignoring sequence {} because of ambigious AA'
-                              .format(inf))
+                        print(('Ignoring sequence {} because of ambigious AA'
+                              .format(inf)))
                     
                     seq = ''
                 inf = line[1:].split()[0]
@@ -108,7 +108,7 @@ def get_data(sequences, prot_ids):
         p = Popen(['diamond', 'blastp', '-d', 'data/embeddings',
                    '--max-target-seqs', '1', '--min-score', '60',
                    '--outfmt', '6', 'qseqid', 'sseqid'], stdin=PIPE, stdout=PIPE)
-        for i in xrange(n):
+        for i in range(n):
             p.stdin.write('>' + str(i) + '\n' + sequences[i] + '\n')
         p.stdin.close()
 
@@ -119,13 +119,13 @@ def get_data(sequences, prot_ids):
                 if len(it) == 2:
                     prot_ids[it[1]] = int(it[0])
 
-    prots = embed_df[embed_df['accessions'].isin(prot_ids.keys())]
+    prots = embed_df[embed_df['accessions'].isin(list(prot_ids.keys()))]
     for i, row in prots.iterrows():
         embeds[prot_ids[row['accessions']], :] = row['embeddings']
 
-    for i in xrange(len(sequences)):
+    for i in range(len(sequences)):
         seq = sequences[i]
-        for j in xrange(min(MAXLEN, len(seq)) - gram_len + 1):
+        for j in range(min(MAXLEN, len(seq)) - gram_len + 1):
             data[i, j] = vocab[seq[j: (j + gram_len)]]
     return [data, embeds]
 
@@ -133,13 +133,13 @@ def get_data(sequences, prot_ids):
 def predict(data, model, model_name, functions, threshold, batch_size):
     n = data[0].shape[0]
     result = list()
-    for i in xrange(n):
+    for i in range(n):
         result.append(list())
     predictions = model.predict(
         data, batch_size=batch_size, verbose=1)
-    for i in xrange(n):
+    for i in range(n):
         pred = (predictions[i] >= threshold).astype('int32')
-        for j in xrange(len(functions)):
+        for j in range(len(functions)):
             if pred[j] == 1:
                 result[i].append(model_name + '_' + functions[j] + '|' + '%.2f' % predictions[i][j])
     return result
@@ -157,8 +157,8 @@ def init_models(conf=None, **kwargs):
     for key, gram in enumerate(ngram_df['ngrams']):
         vocab[gram] = key + 1
         gram_len = len(ngram_df['ngrams'][0])
-    print('Gram length:', gram_len)
-    print('Vocabulary size:', len(vocab))
+    print(('Gram length:', gram_len))
+    print(('Vocabulary size:', len(vocab)))
     threshold = 0.3
     # sequences = ['MKKVLVINGPNLNLLGIREKNIYGSVSYEDVLKSISRKAQELGFEVEFFQSNHEGEIIDKIHRAYFEKVDAIIINPGAYTHYSYAIHDAIKAVNIPTIEVHISNIHAREEFRHKSVIAPACTGQISGFGIKSYIIALYALKEILD']
     # data = get_data(sequences)
@@ -167,7 +167,7 @@ def init_models(conf=None, **kwargs):
         df = pd.read_pickle('data/models/%s.pkl' % onto)
         functions = df['functions']
         models.append((model, functions))
-        print 'Model %s initialized.' % onto
+        print('Model %s initialized.' % onto)
         # result = predict(data, model, functions, threshold)
         # print result
 
@@ -180,15 +180,15 @@ def predict_functions(sequences, prot_ids, batch_size, threshold):
     data = get_data(sequences, prot_ids)
     result = list()
     n = len(sequences)
-    for i in xrange(n):
+    for i in range(n):
         result.append([])
     for i in range(len(models)):
         model, functions = models[i]
-        print 'Running predictions for model %s' % funcs[i]
+        print('Running predictions for model %s' % funcs[i])
         res = predict(data, model, funcs[i], functions, threshold, batch_size)
-        for j in xrange(n):
+        for j in range(n):
             result[j] += res[j]
-    print('Predictions time: {}'.format(time.time() - start_time))
+    print(('Predictions time: {}'.format(time.time() - start_time)))
     return result
 
 

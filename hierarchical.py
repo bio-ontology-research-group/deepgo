@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import division
+
+
+
 
 import os
 import sys
@@ -75,7 +75,7 @@ def load_data(split=0.7):
         return values
 
     def pad_sequences(values, max_len=1000):
-        for i in xrange(len(values)):
+        for i in range(len(values)):
             padded = np.zeros((max_len,), dtype='int32')
             padded[:len(values[i])] = values[i][:]
             values[i] = padded
@@ -137,16 +137,16 @@ def train_model(dataset, batch_size=512, epochs=10):
         update = trainer.minimize(loss)
 
         outputs = [loss]
-        for i in xrange(len(functions)):
+        for i in range(len(functions)):
             go_id = functions[i]
             outputs.append(layers[go_id]['output'])
 
     with tf.Session() as sess:
         tf.global_variables_initializer().run()
-        for epoch in xrange(epochs):
+        for epoch in range(epochs):
             print('Epoch %d/%d' % (epoch, epochs))
             sum_loss = 0.0
-            with ck.progressbar(xrange(train_steps)) as bar:
+            with ck.progressbar(range(train_steps)) as bar:
                 for step in bar:
                     offset = step * batch_size
                     batch_input1 = train_input1[offset:(offset + batch_size)]
@@ -168,7 +168,7 @@ def train_model(dataset, batch_size=512, epochs=10):
             predictions = np.empty(
                 (valid_n, len(functions)), dtype='float32')
 
-            for step in xrange(valid_steps):
+            for step in range(valid_steps):
                 offset = step * batch_size
                 feed_dict = {
                     placeholders['input1']: valid_input1[offset:(offset + batch_size)],
@@ -190,7 +190,7 @@ def train_model(dataset, batch_size=512, epochs=10):
         sum_loss = 0.0
         predictions = np.empty(
             (test_n, len(functions)), dtype='float32')
-        for step in xrange(test_steps):
+        for step in range(test_steps):
             offset = step * batch_size
             feed_dict = {
                 placeholders['input1']: test_input1[offset:(offset + batch_size)],

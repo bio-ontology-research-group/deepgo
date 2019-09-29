@@ -37,7 +37,7 @@ def main(function, split):
     functions = func_df['functions'].values
     global func_set
     func_set = get_go_set(go, GO_ID)
-    print len(functions)
+    print(len(functions))
     global go_indexes
     go_indexes = dict()
     for ind, go_id in enumerate(functions):
@@ -51,8 +51,8 @@ def load_data():
     for key, gram in enumerate(ngram_df['ngrams']):
         vocab[gram] = key + 1
     gram_len = len(ngram_df['ngrams'][0])
-    print('Gram length:', gram_len)
-    print('Vocabulary size:', len(vocab))
+    print(('Gram length:', gram_len))
+    print(('Vocabulary size:', len(vocab)))
     proteins = list()
     gos = list()
     labels = list()
@@ -87,7 +87,7 @@ def load_data():
         seq = row['sequences']
         sequences.append(seq)
         grams = np.zeros((len(seq) - gram_len + 1, ), dtype='int32')
-        for i in xrange(len(seq) - gram_len + 1):
+        for i in range(len(seq) - gram_len + 1):
             grams[i] = vocab[seq[i: (i + gram_len)]]
         ngrams.append(grams)
         label = np.zeros((len(functions),), dtype='int32')
@@ -102,7 +102,7 @@ def load_data():
         'labels': labels,
         'gos': gos,
         'sequences': sequences})
-    print(len(res_df))
+    print((len(res_df)))
     return res_df
 
 
@@ -127,7 +127,7 @@ def run(*args, **kwargs):
         if not isinstance(row['embeddings'], np.ndarray):
             row['embeddings'] = np.zeros((256,), dtype='float32')
             missing_rep += 1
-    print('Missing network reps:', missing_rep)
+    print(('Missing network reps:', missing_rep))
     df = df[df['orgs'] == '9606']
     # index = df.index.values
     # np.random.seed(seed=0)

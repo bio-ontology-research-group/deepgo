@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
+
 import click as ck
 import pandas as pd
 import numpy as np
@@ -104,7 +104,7 @@ def to_fasta(sequence):
     length = 60
     n = len(sequence)
     res = ''
-    for i in xrange(0, n, length):
+    for i in range(0, n, length):
         res += sequence[i: i + length] + '\n'
     return res
 

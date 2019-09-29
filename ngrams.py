@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import click as ck
 import pandas as pd
 from aaindex import is_ok
@@ -15,7 +15,7 @@ def main(length):
     seqs = get_sequences()
     ngrams = set()
     for seq in seqs:
-        for i in xrange(len(seq) - length + 1):
+        for i in range(len(seq) - length + 1):
             ngrams.add(seq[i: (i + length)])
     ngrams = list(sorted(ngrams))
     print(ngrams[:100])
