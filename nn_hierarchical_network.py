@@ -107,22 +107,22 @@ def main(function, device, org, train, param):
             'stride': 32
         }
         model(params, is_train=train)
-        dims = [64, 128, 256, 512]
-        nb_filters = [16, 32, 64, 128]
-        nb_convs = [1, 2, 3, 4]
-        nb_dense = [1, 2, 3, 4]
-        for i in range(param * 32, param * 32 + 32):
-            dim = i % 4
-            i = i / 4
-            nb_fil = i % 4
-            i /= 4
-            conv = i % 4
-            i /= 4
-            den = i 
-            params['embedding_dims'] = dims[dim]
-            params['nb_filter'] = nb_filters[nb_fil]
-            params['nb_conv'] = nb_convs[conv]
-            params['nb_dense'] = nb_dense[den]
+        # dims = [64, 128, 256, 512]
+        # nb_filters = [16, 32, 64, 128]
+        # nb_convs = [1, 2, 3, 4]
+        # nb_dense = [1, 2, 3, 4]
+        # for i in range(param * 32, param * 32 + 32):
+        #     dim = i % 4
+        #     i = i / 4
+        #     nb_fil = i % 4
+        #     i /= 4
+        #     conv = i % 4
+        #     i /= 4
+        #     den = i 
+        #     params['embedding_dims'] = dims[dim]
+        #     params['nb_filter'] = nb_filters[nb_fil]
+        #     params['nb_conv'] = nb_convs[conv]
+        #     params['nb_dense'] = nb_dense[den]
             # f = model(params, is_train=train)
             # print(dims[dim], nb_filters[nb_fil], nb_convs[conv], nb_dense[den], f)
     # performanc_by_interpro()
@@ -374,7 +374,6 @@ def model(params, batch_size=128, nb_epoch=6, is_train=True):
         test_generator, val_samples=len(test_data[0]))
     running_time = time.time() - start_time
     logging.info('Running time: %d %d' % (running_time, len(test_data[0])))
-    return
     logging.info('Computing performance')
     f, p, r, t, preds_max = compute_performance(preds, test_labels, test_gos)
     roc_auc = compute_roc(preds, test_labels)
