@@ -109,7 +109,7 @@ def get_data(sequences, prot_ids):
                    '--max-target-seqs', '1', '--min-score', '60',
                    '--outfmt', '6', 'qseqid', 'sseqid'], stdin=PIPE, stdout=PIPE)
         for i in range(n):
-            p.stdin.write(bytes('>' + str(i) + '\n' + sequences[i] + '\n'), encoding='utf-8')
+            p.stdin.write(bytes('>' + str(i) + '\n' + sequences[i] + '\n', encoding='utf-8'))
         p.stdin.close()
 
         prot_ids = {}
