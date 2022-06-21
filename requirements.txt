@@ -6,7 +6,7 @@ h5py==2.6.0
 Keras==1.1.2
 matplotlib==1.5.1
 mock==2.0.0
-numpy==1.15.2
+numpy==1.22.0
 pandas==0.18.0
 pbr==1.10.0
 protobuf==3.1.0
